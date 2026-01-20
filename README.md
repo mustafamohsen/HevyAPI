@@ -101,6 +101,18 @@ try {
 
 Get your API key from [Hevy Settings](https://hevy.com/settings?developer). The API is only available to Hevy Pro users.
 
+## Documentation for AI/LLM Context
+
+This project includes `llms.txt` and `llms-full.txt` files designed to provide AI assistants and LLMs with comprehensive context about the codebase:
+
+- **llms.txt** - High-level overview, API endpoints, types, error handling, and development workflow
+- **llms-full.txt** - Complete source code of all `src/` files for full context
+
+These files are useful for:
+- AI coding assistants that need to understand the library structure
+- Documentation generation tools
+- Code analysis and refactoring with full context
+
 ## License
 
 MIT
