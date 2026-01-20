@@ -1,0 +1,318 @@
+# Hevy API TypeScript Client
+
+> TypeScript client library for the Hevy fitness tracking app API
+
+## Quick Start
+
+```typescript
+import Hevy from 'hevy-api';
+
+const client = new Hevy({
+  apiKey: process.env.HEVY_API_KEY!,
+});
+
+const workouts = await client.workouts.getAll({ page: 1, pageSize: 10 });
+```
+
+## Project Structure
+
+```
+src/
+├── client/         # Base API client with auth and error handling
+├── errors/         # Custom error classes
+├── resources/      # API resource classes (workouts, routines, etc.)
+├── types/          # TypeScript type definitions
+└── index.ts        # Main entry point
+tests/              # Test files (mirrors src structure)
+examples/           # Usage examples
+```
+
+## Available Resources
+
+### Workouts (`client.workouts`)
+- `getAll(params?)` - Get paginated list of workouts
+- `getById(workoutId)` - Get single workout by ID
+- `count()` - Get total workout count
+- `getEvents(params)` - Get workout events (updates/deletes)
+- `create(workout)` - Create new workout
+- `update(workoutId, workout)` - Update existing workout
+
+### Routines (`client.routines`)
+- `getAll(params?)` - Get paginated list of routines
+- `getById(routineId)` - Get single routine by ID
+- `create(routine)` - Create new routine
+- `update(routineId, routine)` - Update existing routine
+
+### Exercise Templates (`client.exerciseTemplates`)
+- `getAll(params?)` - Get paginated list of exercise templates
+- `getById(exerciseTemplateId)` - Get single exercise template
+- `create(exercise)` - Create custom exercise template
+
+### Routine Folders (`client.routineFolders`)
+- `getAll(params?)` - Get paginated list of routine folders
+- `getById(folderId)` - Get single routine folder
+- `create(folder)` - Create new routine folder
+
+### Exercise History (`client.exerciseHistory`)
+- `getByExerciseTemplateId(exerciseTemplateId, params?)` - Get exercise history
+
+## API Endpoints
+
+### Workouts
+
+**GET `/v1/workouts`**
+- Get paginated list of workouts
+- Query params: `page` (default: 1), `pageSize` (default: 5)
+- Returns: `PaginatedWorkouts`
+
+**GET `/v1/workouts/{workoutId}`**
+- Get single workout by ID
+- Returns: `Workout`
+
+**GET `/v1/workouts/count`**
+- Get total workout count
+- Returns: `WorkoutSummary`
+
+**GET `/v1/workouts/events`**
+- Get workout events (updates/deletes) for synchronization
+- Query params: `page`, `pageSize`, `since` (ISO date)
+- Returns: `PaginatedWorkoutEvents`
+
+**POST `/v1/workouts`**
+- Create new workout
+- Body: `PostWorkoutsRequestBody`
+- Returns: `Workout`
+
+**PUT `/v1/workouts/{workoutId}`**
+- Update existing workout
+- Body: `PostWorkoutsRequestBody`
+- Returns: `Workout`
+
+### Routines
+
+**GET `/v1/routines`**
+- Get paginated list of routines
+- Query params: `page`, `pageSize`
+- Returns: `PaginatedRoutines`
+
+**GET `/v1/routines/{routineId}`**
+- Get single routine by ID
+- Returns: `{ routine: Routine }`
+
+**POST `/v1/routines`**
+- Create new routine
+- Body: `PostRoutinesRequestBody`
+- Returns: `Routine`
+
+**PUT `/v1/routines/{routineId}`**
+- Update existing routine
+- Body: `PutRoutinesRequestBody`
+- Returns: `Routine`
+
+### Exercise Templates
+
+**GET `/v1/exercise_templates`**
+- Get paginated list of exercise templates
+- Query params: `page`, `pageSize`
+- Returns: `PaginatedExerciseTemplates`
+
+**GET `/v1/exercise_templates/{exerciseTemplateId}`**
+- Get single exercise template
+- Returns: `ExerciseTemplate`
+
+**POST `/v1/exercise_templates`**
+- Create custom exercise template
+- Body: `CreateCustomExerciseRequestBody`
+- Returns: `{ id: number }`
+
+### Routine Folders
+
+**GET `/v1/routine_folders`**
+- Get paginated list of routine folders
+- Query params: `page`, `pageSize`
+- Returns: `PaginatedRoutineFolders`
+
+**GET `/v1/routine_folders/{folderId}`**
+- Get single routine folder
+- Returns: `RoutineFolder`
+
+**POST `/v1/routine_folders`**
+- Create new routine folder
+- Body: `PostRoutineFolderRequestBody`
+- Returns: `RoutineFolder`
+
+### Exercise History
+
+**GET `/v1/exercise_history/{exerciseTemplateId}`**
+- Get exercise history for a template
+- Query params: `start_date`, `end_date` (ISO dates)
+- Returns: `ExerciseHistoryResponse`
+
+## Error Handling
+
+All errors extend `HevyAPIError`:
+
+### `AuthenticationError` (401/403)
+Invalid API key or forbidden access
+```typescript
+try {
+  await client.workouts.getAll();
+} catch (error) {
+  if (error instanceof AuthenticationError) {
+    console.error('Invalid API key');
+  }
+}
+```
+
+### `ValidationError` (400)
+Request validation failed with field-specific errors
+```typescript
+try {
+  await client.workouts.create(workout);
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.error('Validation failed:', error.fieldErrors);
+  }
+}
+```
+
+### `NotFoundError` (404)
+Resource not found
+```typescript
+try {
+  await client.workouts.getById('invalid-id');
+} catch (error) {
+  if (error instanceof NotFoundError) {
+    console.error('Workout not found');
+  }
+}
+```
+
+### `RateLimitError` (429)
+Rate limit exceeded, includes retry-after time
+```typescript
+try {
+  await client.workouts.getAll();
+} catch (error) {
+  if (error instanceof RateLimitError) {
+    console.error('Rate limited. Retry after:', error.retryAfter, 'ms');
+  }
+}
+```
+
+### `NetworkError`
+Network/timeout issues
+```typescript
+try {
+  await client.workouts.getAll();
+} catch (error) {
+  if (error instanceof NetworkError) {
+    console.error('Network error:', error.message);
+  }
+}
+```
+
+## Type Safety
+
+All API responses and requests are fully typed. Import types from the main package:
+
+```typescript
+import type {
+  Workout,
+  Routine,
+  ExerciseTemplate,
+  Set,
+  Exercise,
+  PaginationParams,
+  PostWorkoutsRequestBody,
+} from 'hevy-api';
+```
+
+### Key Types
+
+**Workout Types:**
+- `Workout` - Complete workout object
+- `PaginatedWorkouts` - Paginated response with metadata
+- `WorkoutSummary` - Workout count response
+- `WorkoutEvent` - Workout update/delete event
+- `PaginatedWorkoutEvents` - Paginated events
+
+**Routine Types:**
+- `Routine` - Complete routine object
+- `PaginatedRoutines` - Paginated response
+- `PostRoutinesRequestBody` - Create routine payload
+- `PutRoutinesRequestBody` - Update routine payload
+
+**Exercise Types:**
+- `ExerciseTemplate` - Exercise template object
+- `PaginatedExerciseTemplates` - Paginated response
+- `CreateCustomExerciseRequestBody` - Create exercise payload
+- `ExerciseHistoryResponse` - Exercise history response
+- `ExerciseHistoryEntry` - Single history entry
+
+**Set Types:**
+- `SetType` - 'warmup' | 'normal' | 'failure' | 'dropset'
+- `Set` - Workout set with all metrics
+- `PostWorkoutsRequestSet` - Create workout set
+- `PostRoutinesRequestSet` - Create routine set with rep_range
+
+**Folder Types:**
+- `RoutineFolder` - Routine folder object
+- `PaginatedRoutineFolders` - Paginated response
+
+**Utility Types:**
+- `PaginationParams` - { page?, pageSize? }
+- `RepRange` - { start?, end? }
+- `MuscleGroup` - 18 muscle group options
+- `EquipmentCategory` - 8 equipment types
+- `CustomExerciseType` - 8 exercise type options
+
+## Development
+
+- **Package Manager**: bun
+- **Linter/Formatter**: biome
+- **Testing**: bun test (100% coverage)
+- **Build**: bun run build
+
+## Commands
+
+```bash
+bun install          # Install dependencies
+bun run build        # Build TypeScript
+bun test             # Run tests
+bunx biome format --write .  # Format code
+bunx biome check .   # Lint code
+```
+
+## API Authentication
+
+All requests require an API key passed in the `api-key` header. The client automatically handles this via axios interceptors.
+
+Get your API key from [Hevy Settings](https://hevy.com/settings?developer). The API is only available to Hevy Pro users.
+
+## Contributing
+
+Follow conventional commits:
+- `feat:` - New features
+- `fix:` - Bug fixes
+- `docs:` - Documentation only
+- `test:` - Tests
+- `refactor:` - Code restructuring
+- `chore:` - Maintenance
+
+Commit after each step with appropriate conventional commit messages.
+
+## Testing
+
+The project has 100% test coverage with 26 test cases covering:
+- Authentication errors (401, 403)
+- Validation errors (400) with field errors
+- Not found errors (404)
+- Rate limit errors (429) with retry-after handling
+- Network errors (timeout, connection issues)
+- Default API errors (5xx)
+- API key header injection
+- Resource client initialization
+- All error class constructors and properties
+
+Run tests with `bun test` and verify coverage with `bun test --coverage`.

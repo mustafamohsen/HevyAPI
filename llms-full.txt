@@ -1,0 +1,808 @@
+# Hevy API TypeScript Client - Full Source Code
+
+> Complete source code for the Hevy API TypeScript client library
+
+## File: src/types/index.ts
+
+```typescript
+// Set Types
+export type SetType = 'warmup' | 'normal' | 'failure' | 'dropset';
+
+export interface Set {
+  index: number;
+  type: SetType;
+  weight_kg: number | null;
+  reps: number | null;
+  distance_meters: number | null;
+  duration_seconds: number | null;
+  rpe: number | null;
+  custom_metric: number | null;
+}
+
+export interface PostWorkoutsRequestSet {
+  type: SetType;
+  weight_kg: number | null;
+  reps: number | null;
+  distance_meters: number | null;
+  duration_seconds: number | null;
+  custom_metric: number | null;
+  rpe?: 6 | 7 | 7.5 | 8 | 8.5 | 9 | 9.5 | 10;
+}
+
+export interface RepRange {
+  start: number | null;
+  end: number | null;
+}
+
+export interface PostRoutinesRequestSet {
+  type: SetType;
+  weight_kg: number | null;
+  reps: number | null;
+  distance_meters: number | null;
+  duration_seconds: number | null;
+  custom_metric: number | null;
+  rep_range?: RepRange | null;
+}
+
+export interface PutRoutinesRequestSet {
+  type: SetType;
+  weight_kg: number | null;
+  reps: number | null;
+  distance_meters: number | null;
+  duration_seconds: number | null;
+  custom_metric: number | null;
+  rep_range?: RepRange | null;
+}
+
+// Exercise Types
+export interface Exercise {
+  index: number;
+  title: string;
+  notes: string;
+  exercise_template_id: string;
+  supersets_id: number | null;
+  sets: Set[];
+}
+
+export interface PostWorkoutsRequestExercise {
+  exercise_template_id: string;
+  superset_id: number | null;
+  notes?: string | null;
+  sets: PostWorkoutsRequestSet[];
+}
+
+export interface PostRoutinesRequestExercise {
+  exercise_template_id: string;
+  superset_id?: number | null;
+  rest_seconds?: number | null;
+  notes?: string | null;
+  sets: PostRoutinesRequestSet[];
+}
+
+export interface PutRoutinesRequestExercise {
+  exercise_template_id: string;
+  superset_id?: number | null;
+  rest_seconds?: number | null;
+  notes?: string | null;
+  sets: PutRoutinesRequestSet[];
+}
+
+// Workout Types
+export interface Workout {
+  id: string;
+  title: string;
+  routine_id?: string;
+  description?: string;
+  start_time: string;
+  end_time: string;
+  updated_at: string;
+  created_at: string;
+  exercises: Exercise[];
+  is_private?: boolean;
+}
+
+export interface WorkoutSummary {
+  workout_count: number;
+}
+
+export interface PostWorkoutsRequestBody {
+  workout: {
+    title: string;
+    description?: string | null;
+    start_time: string;
+    end_time: string;
+    is_private?: boolean;
+    exercises: PostWorkoutsRequestExercise[];
+  };
+}
+
+export interface PaginatedWorkouts {
+  page: number;
+  page_count: number;
+  workouts: Workout[];
+}
+
+// Workout Event Types
+export interface UpdatedWorkout {
+  type: 'updated';
+  workout: Workout;
+}
+
+export interface DeletedWorkout {
+  type: 'deleted';
+  id: string;
+  deleted_at: string;
+}
+
+export type WorkoutEvent = UpdatedWorkout | DeletedWorkout;
+
+export interface PaginatedWorkoutEvents {
+  page: number;
+  page_count: number;
+  events: WorkoutEvent[];
+}
+
+// Routine Types
+export interface Routine {
+  id: string;
+  title: string;
+  folder_id?: number | null;
+  updated_at: string;
+  created_at: string;
+  exercises: {
+    index: number;
+    title: string;
+    rest_seconds?: string;
+    notes?: string;
+    exercise_template_id: string;
+    supersets_id?: number | null;
+    sets: {
+      index: number;
+      type: SetType;
+      weight_kg?: number | null;
+      reps?: number | null;
+      rep_range?: RepRange | null;
+      distance_meters?: number | null;
+      duration_seconds?: number | null;
+      rpe?: number | null;
+      custom_metric?: number | null;
+    }[];
+  }[];
+}
+
+export interface PostRoutinesRequestBody {
+  routine: {
+    title: string;
+    folder_id?: number | null;
+    notes?: string;
+    exercises: PostRoutinesRequestExercise[];
+  };
+}
+
+export interface PutRoutinesRequestBody {
+  routine: {
+    title: string;
+    notes?: string | null;
+    exercises: PutRoutinesRequestExercise[];
+  };
+}
+
+export interface PaginatedRoutines {
+  page: number;
+  page_count: number;
+  routines: Routine[];
+}
+
+// Exercise Template Types
+export type CustomExerciseType =
+  | 'weight_reps'
+  | 'reps_only'
+  | 'bodyweight_reps'
+  | 'bodyweight_assisted_reps'
+  | 'duration'
+  | 'weight_duration'
+  | 'distance_duration'
+  | 'short_distance_weight';
+
+export type MuscleGroup =
+  | 'abdominals'
+  | 'shoulders'
+  | 'biceps'
+  | 'triceps'
+  | 'forearms'
+  | 'quadriceps'
+  | 'hamstrings'
+  | 'calves'
+  | 'glutes'
+  | 'abductors'
+  | 'adductors'
+  | 'lats'
+  | 'upper_back'
+  | 'traps'
+  | 'lower_back'
+  | 'chest'
+  | 'cardio'
+  | 'neck'
+  | 'full_body'
+  | 'other';
+
+export type EquipmentCategory =
+  | 'none'
+  | 'barbell'
+  | 'dumbbell'
+  | 'kettlebell'
+  | 'machine'
+  | 'plate'
+  | 'resistance_band'
+  | 'suspension'
+  | 'other';
+
+export interface ExerciseTemplate {
+  id: string;
+  title: string;
+  type: CustomExerciseType;
+  primary_muscle_group: MuscleGroup;
+  secondary_muscle_groups: MuscleGroup[];
+  is_custom: boolean;
+}
+
+export interface CreateCustomExerciseRequestBody {
+  exercise: {
+    title: string;
+    exercise_type: CustomExerciseType;
+    equipment_category: EquipmentCategory;
+    muscle_group: MuscleGroup;
+    other_muscles?: MuscleGroup[];
+  };
+}
+
+export interface PaginatedExerciseTemplates {
+  page: number;
+  page_count: number;
+  exercise_templates: ExerciseTemplate[];
+}
+
+// Exercise History Types
+export interface ExerciseHistoryEntry {
+  workout_id: string;
+  workout_title: string;
+  workout_start_time: string;
+  workout_end_time: string;
+  exercise_template_id: string;
+  weight_kg: number | null;
+  reps: number | null;
+  distance_meters: number | null;
+  duration_seconds: number | null;
+  rpe: number | null;
+  custom_metric: number | null;
+  set_type: SetType;
+}
+
+export interface ExerciseHistoryResponse {
+  exercise_history: ExerciseHistoryEntry[];
+}
+
+// Routine Folder Types
+export interface RoutineFolder {
+  id: number;
+  index: number;
+  title: string;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface PostRoutineFolderRequestBody {
+  routine_folder: {
+    title: string;
+  };
+}
+
+export interface PaginatedRoutineFolders {
+  page: number;
+  page_count: number;
+  routine_folders: RoutineFolder[];
+}
+
+// Pagination Types
+export interface PaginationParams {
+  page?: number;
+  pageSize?: number;
+}
+
+// API Response Types
+export interface ApiErrorResponse {
+  error: string;
+}
+```
+
+## File: src/errors/index.ts
+
+```typescript
+export class HevyAPIError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public response?: unknown,
+  ) {
+    super(message);
+    this.name = 'HevyAPIError';
+  }
+}
+
+export class AuthenticationError extends HevyAPIError {
+  constructor(message: string = 'Authentication failed. Please verify your API key.') {
+    super(message, 401);
+    this.name = 'AuthenticationError';
+  }
+}
+
+export class ValidationError extends HevyAPIError {
+  constructor(
+    message: string = 'Validation failed',
+    public fieldErrors?: Record<string, string>,
+  ) {
+    super(message, 400);
+    this.name = 'ValidationError';
+  }
+}
+
+export class NotFoundError extends HevyAPIError {
+  constructor(message: string = 'Resource not found') {
+    super(message, 404);
+    this.name = 'NotFoundError';
+  }
+}
+
+export class RateLimitError extends HevyAPIError {
+  constructor(public retryAfter: number = 5000) {
+    super(`Rate limit exceeded. Please retry after ${retryAfter}ms`, 429);
+    this.name = 'RateLimitError';
+  }
+}
+
+export class ForbiddenError extends HevyAPIError {
+  constructor(message: string = 'Access forbidden') {
+    super(message, 403);
+    this.name = 'ForbiddenError';
+  }
+}
+
+export class NetworkError extends Error {
+  constructor(
+    message: string,
+    public originalError?: Error,
+  ) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+```
+
+## File: src/client/index.ts
+
+```typescript
+import axios, {
+  type AxiosInstance,
+  type AxiosError,
+  type AxiosRequestConfig,
+  type InternalAxiosRequestConfig,
+} from 'axios';
+import {
+  HevyAPIError,
+  AuthenticationError,
+  ValidationError,
+  NotFoundError,
+  RateLimitError,
+  NetworkError,
+} from '../errors';
+
+export interface HevyClientConfig {
+  apiKey: string;
+  baseURL?: string;
+  timeout?: number;
+}
+
+export interface RequestOptions extends AxiosRequestConfig {
+  requiresAuth?: boolean;
+}
+
+export abstract class BaseHevyClient {
+  protected client: AxiosInstance;
+  protected apiKey: string;
+
+  constructor(config: HevyClientConfig) {
+    this.apiKey = config.apiKey;
+    this.client = axios.create({
+      baseURL: config.baseURL || 'https://api.hevyapp.com',
+      timeout: config.timeout || 30000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    this.setupRequestInterceptor();
+    this.setupResponseInterceptor();
+  }
+
+  private setupRequestInterceptor(): void {
+    this.client.interceptors.request.use(
+      (config: InternalAxiosRequestConfig) => {
+        config.headers.set('api-key', this.apiKey);
+        return config;
+      },
+      (error: unknown) => {
+        return Promise.reject(new NetworkError('Failed to make request', error as Error));
+      },
+    );
+  }
+
+  private setupResponseInterceptor(): void {
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error: AxiosError) => {
+        this.handleError(error);
+      },
+    );
+  }
+
+  private handleError(error: AxiosError): never {
+    if (!error.response) {
+      const isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
+      throw new NetworkError(
+        isTimeout ? 'Request timed out' : 'Network error occurred',
+        error as Error,
+      );
+    }
+
+    const status = error.response.status;
+    const responseData = error.response.data;
+
+    switch (status) {
+      case 400: {
+        const fieldErrors = this.extractFieldErrors(responseData);
+        throw new ValidationError('Validation failed', fieldErrors);
+      }
+      case 401:
+      case 403:
+        throw new AuthenticationError('Authentication failed. Please verify your API key.');
+      case 404:
+        throw new NotFoundError('Resource not found');
+      case 429: {
+        const retryAfter = this.parseRetryAfter(
+          error.response.headers['retry-after'] as string | undefined,
+        );
+        throw new RateLimitError(retryAfter);
+      }
+      default:
+        throw new HevyAPIError(`HTTP error ${status}`, status, responseData);
+    }
+  }
+
+  private parseRetryAfter(header?: string): number {
+    if (!header) return 5000;
+    const seconds = parseInt(header, 10);
+    return Number.isNaN(seconds) ? 5000 : seconds * 1000;
+  }
+
+  private extractFieldErrors(responseData: unknown): Record<string, string> | undefined {
+    if (
+      responseData &&
+      typeof responseData === 'object' &&
+      (responseData as Record<string, unknown>).errors
+    ) {
+      const errors = (responseData as Record<string, unknown>).errors;
+      if (typeof errors === 'object' && errors !== null) {
+        return Object.entries(errors as Record<string, unknown>).reduce(
+          (acc, [key, value]) => {
+            acc[key] = String(value);
+            return acc;
+          },
+          {} as Record<string, string>,
+        );
+      }
+    }
+    return undefined;
+  }
+
+  protected async request<T>(options: RequestOptions): Promise<T> {
+    try {
+      const response = await this.client.request<T>(options);
+      return response.data;
+    } catch (error) {
+      if (error instanceof HevyAPIError || error instanceof NetworkError) {
+        throw error;
+      }
+      throw new NetworkError('Unknown error occurred', error as Error);
+    }
+  }
+}
+```
+
+## File: src/resources/workouts.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  Workout,
+  WorkoutSummary,
+  PostWorkoutsRequestBody,
+  PaginatedWorkouts,
+  PaginatedWorkoutEvents,
+  PaginationParams,
+} from '../types';
+
+export class WorkoutsClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedWorkouts> {
+    return this.request<PaginatedWorkouts>({
+      method: 'GET',
+      url: '/v1/workouts',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 5,
+      },
+    });
+  }
+
+  async getById(workoutId: string): Promise<Workout> {
+    return this.request<Workout>({
+      method: 'GET',
+      url: `/v1/workouts/${workoutId}`,
+    });
+  }
+
+  async count(): Promise<WorkoutSummary> {
+    return this.request<WorkoutSummary>({
+      method: 'GET',
+      url: '/v1/workouts/count',
+    });
+  }
+
+  async getEvents(params: PaginationParams & { since?: string }): Promise<PaginatedWorkoutEvents> {
+    return this.request<PaginatedWorkoutEvents>({
+      method: 'GET',
+      url: '/v1/workouts/events',
+      params: {
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 5,
+        since: params.since,
+      },
+    });
+  }
+
+  async create(workout: PostWorkoutsRequestBody): Promise<Workout> {
+    return this.request<Workout>({
+      method: 'POST',
+      url: '/v1/workouts',
+      data: workout,
+    });
+  }
+
+  async update(workoutId: string, workout: PostWorkoutsRequestBody): Promise<Workout> {
+    return this.request<Workout>({
+      method: 'PUT',
+      url: `/v1/workouts/${workoutId}`,
+      data: workout,
+    });
+  }
+}
+```
+
+## File: src/resources/routines.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  Routine,
+  PostRoutinesRequestBody,
+  PutRoutinesRequestBody,
+  PaginatedRoutines,
+  PaginationParams,
+} from '../types';
+
+export class RoutinesClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedRoutines> {
+    return this.request<PaginatedRoutines>({
+      method: 'GET',
+      url: '/v1/routines',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 5,
+      },
+    });
+  }
+
+  async getById(routineId: string): Promise<{ routine: Routine }> {
+    return this.request<{ routine: Routine }>({
+      method: 'GET',
+      url: `/v1/routines/${routineId}`,
+    });
+  }
+
+  async create(routine: PostRoutinesRequestBody): Promise<Routine> {
+    return this.request<Routine>({
+      method: 'POST',
+      url: '/v1/routines',
+      data: routine,
+    });
+  }
+
+  async update(routineId: string, routine: PutRoutinesRequestBody): Promise<Routine> {
+    return this.request<Routine>({
+      method: 'PUT',
+      url: `/v1/routines/${routineId}`,
+      data: routine,
+    });
+  }
+}
+```
+
+## File: src/resources/exerciseTemplates.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  ExerciseTemplate,
+  CreateCustomExerciseRequestBody,
+  PaginatedExerciseTemplates,
+  PaginationParams,
+} from '../types';
+
+export class ExerciseTemplatesClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedExerciseTemplates> {
+    return this.request<PaginatedExerciseTemplates>({
+      method: 'GET',
+      url: '/v1/exercise_templates',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 5,
+      },
+    });
+  }
+
+  async getById(exerciseTemplateId: string): Promise<ExerciseTemplate> {
+    return this.request<ExerciseTemplate>({
+      method: 'GET',
+      url: `/v1/exercise_templates/${exerciseTemplateId}`,
+    });
+  }
+
+  async create(exercise: CreateCustomExerciseRequestBody): Promise<{ id: number }> {
+    return this.request<{ id: number }>({
+      method: 'POST',
+      url: '/v1/exercise_templates',
+      data: exercise,
+    });
+  }
+}
+```
+
+## File: src/resources/routineFolders.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  RoutineFolder,
+  PostRoutineFolderRequestBody,
+  PaginatedRoutineFolders,
+  PaginationParams,
+} from '../types';
+
+export class RoutineFoldersClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedRoutineFolders> {
+    return this.request<PaginatedRoutineFolders>({
+      method: 'GET',
+      url: '/v1/routine_folders',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 5,
+      },
+    });
+  }
+
+  async getById(folderId: string): Promise<RoutineFolder> {
+    return this.request<RoutineFolder>({
+      method: 'GET',
+      url: `/v1/routine_folders/${folderId}`,
+    });
+  }
+
+  async create(folder: PostRoutineFolderRequestBody): Promise<RoutineFolder> {
+    return this.request<RoutineFolder>({
+      method: 'POST',
+      url: '/v1/routine_folders',
+      data: folder,
+    });
+  }
+}
+```
+
+## File: src/resources/exerciseHistory.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type { ExerciseHistoryResponse } from '../types';
+
+export class ExerciseHistoryClient extends BaseHevyClient {
+  async getByExerciseTemplateId(
+    exerciseTemplateId: string,
+    params?: { start_date?: string; end_date?: string },
+  ): Promise<ExerciseHistoryResponse> {
+    return this.request<ExerciseHistoryResponse>({
+      method: 'GET',
+      url: `/v1/exercise_history/${exerciseTemplateId}`,
+      params: {
+        start_date: params?.start_date,
+        end_date: params?.end_date,
+      },
+    });
+  }
+}
+```
+
+## File: src/index.ts
+
+```typescript
+import type { HevyClientConfig } from './client';
+import { BaseHevyClient } from './client';
+import { WorkoutsClient } from './resources/workouts';
+import { RoutinesClient } from './resources/routines';
+import { ExerciseTemplatesClient } from './resources/exerciseTemplates';
+import { RoutineFoldersClient } from './resources/routineFolders';
+import { ExerciseHistoryClient } from './resources/exerciseHistory';
+
+export class Hevy extends BaseHevyClient {
+  public workouts: WorkoutsClient;
+  public routines: RoutinesClient;
+  public exerciseTemplates: ExerciseTemplatesClient;
+  public routineFolders: RoutineFoldersClient;
+  public exerciseHistory: ExerciseHistoryClient;
+
+  constructor(config: HevyClientConfig) {
+    super(config);
+    this.workouts = new WorkoutsClient(config);
+    this.routines = new RoutinesClient(config);
+    this.exerciseTemplates = new ExerciseTemplatesClient(config);
+    this.routineFolders = new RoutineFoldersClient(config);
+    this.exerciseHistory = new ExerciseHistoryClient(config);
+  }
+}
+
+// Re-export types and errors for convenience
+export * from './types';
+export * from './errors';
+
+// Default export for convenience
+export default Hevy;
+```
+
+## Usage Example
+
+```typescript
+import Hevy from './src/index';
+
+const client = new Hevy({
+  apiKey: 'your-api-key',
+});
+
+// Get all workouts
+const workouts = await client.workouts.getAll({ page: 1, pageSize: 10 });
+
+// Get a single workout
+const workout = await client.workouts.getById('workout-id');
+
+// Create a new workout
+const newWorkout = await client.workouts.create({
+  workout: {
+    title: 'My Workout',
+    start_time: '2024-01-01T10:00:00Z',
+    end_time: '2024-01-01T11:00:00Z',
+    exercises: [],
+  },
+});
+```
+
+## Testing
+
+The project includes comprehensive tests in `tests/client.test.ts` with 100% coverage of error handling scenarios.
+
+Run tests with: `bun test`
