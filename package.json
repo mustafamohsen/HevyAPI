@@ -1,0 +1,33 @@
+{
+  "name": "hevy-api",
+  "version": "1.0.0",
+  "description": "TypeScript API client for Hevy fitness tracking app",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "format:ci": "biome format .",
+    "lint:ci": "biome check ."
+  },
+  "keywords": [
+    "hevy",
+    "fitness",
+    "workout",
+    "api",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.11",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
