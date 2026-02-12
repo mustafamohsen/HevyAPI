@@ -1,8 +1,38 @@
 # Hevy API TypeScript Client
 
-A comprehensive TypeScript API client for the [Hevy fitness tracking app](https://api.hevyapp.com/docs/).
+[![NPM Version](https://img.shields.io/npm/v/hevy-api)](https://www.npmjs.com/package/hevy-api)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A comprehensive TypeScript API client for the [Hevy fitness tracking app](https://www.hevyapp.com/).
+
+## About Hevy
+
+[Hevy](https://www.hevyapp.com/) is the #1 workout tracker app with 10+ million athletes worldwide. It's designed to help you log workouts, build routines, track progress, and stay motivated through community features.
+
+**Key Stats:**
+- 10+ million athletes
+- 4.9 App Store & 4.9 Google Play (365,000+ ratings)
+- Available on iOS, Android, Apple Watch, WearOS, and Web
+
+**What Hevy Offers:**
+- **Workout Logging:** Intuitive tracking with routines, rest timers, various set types, supersets, and RPE
+- **Progress Tracking:** Advanced charts, personal records, 1RM calculations, monthly reports, muscle analysis, and body measurements
+- **Social Features:** Follow athletes, like/comment on workouts, share routines, leaderboards, and discovery feed
+- **Exercise Library:** Comprehensive exercise database with custom exercise support
+
+## What You Can Do With This API
+
+This client provides programmatic access to Hevy's core features:
+
+- **Workout Management:** Create, read, update workouts and track workout events
+- **Routines:** Build and manage workout routines with folders
+- **Exercise Templates:** Access the exercise library and create custom exercises
+- **Progress Analysis:** Retrieve exercise history and analyze performance over time
+- **Integration:** Build custom dashboards, analytics tools, or integrate Hevy data into other applications
 
 ## Installation
+
+> **Note:** The Hevy API is only available to [Hevy Pro](https://www.hevyapp.com/pro/) subscribers.
 
 ```bash
 npm install hevy-api
@@ -99,7 +129,9 @@ try {
 
 ## API Key
 
-Get your API key from [Hevy Settings](https://hevy.com/settings?developer). The API is only available to Hevy Pro users.
+Get your API key from [Hevy Settings > Developer](https://hevy.com/settings?developer).
+
+For complete API documentation, visit the [Hevy API Documentation](https://api.hevyapp.com/docs/).
 
 ## Documentation for AI/LLM Context
 

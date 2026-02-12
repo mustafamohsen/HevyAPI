@@ -19,6 +19,20 @@
 - **Format code**: `bunx biome format --write .`
 - **Lint code**: `bunx biome check .`
 
+## Documentation Sync
+
+When code changes are made, you MUST update the following documentation files:
+
+1. **llms.txt** - High-level overview, API endpoints, types, error handling, and development workflow
+2. **llms-full.txt** - Complete source code of all `src/` files for full context
+3. **README.md** - Update with any new features, API methods, or changes to the library
+
+Run the documentation sync after completing implementation tasks:
+
+```bash
+bun run llms:generate
+```
+
 ---
 
 ## Conventional Commits
