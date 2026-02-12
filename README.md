@@ -5,6 +5,8 @@
 
 A comprehensive TypeScript API client for the [Hevy fitness tracking app](https://www.hevyapp.com/).
 
+> Disclaimer: This is an unofficial community project and is not affiliated with, endorsed by, or supported by Hevy.
+
 ## About Hevy
 
 [Hevy](https://www.hevyapp.com/) is the #1 workout tracker app with 10+ million athletes worldwide. It's designed to help you log workouts, build routines, track progress, and stay motivated through community features.
