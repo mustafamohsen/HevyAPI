@@ -40,6 +40,16 @@ This client provides programmatic access to Hevy's core features:
 npm install hevy-api
 ```
 
+The package supports native ESM imports and CommonJS `require`:
+
+```typescript
+import Hevy from 'hevy-api';
+```
+
+```javascript
+const { default: Hevy } = require('hevy-api');
+```
+
 ## Quick Start
 
 ```typescript

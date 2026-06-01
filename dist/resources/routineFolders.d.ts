@@ -1,5 +1,5 @@
 import { BaseHevyClient } from '../client';
-import type { RoutineFolder, PostRoutineFolderRequestBody, PaginatedRoutineFolders, PaginationParams } from '../types';
+import type { PaginatedRoutineFolders, PaginationParams, PostRoutineFolderRequestBody, RoutineFolder } from '../types';
 export declare class RoutineFoldersClient extends BaseHevyClient {
     getAll(params?: PaginationParams): Promise<PaginatedRoutineFolders>;
     getById(folderId: string): Promise<RoutineFolder>;

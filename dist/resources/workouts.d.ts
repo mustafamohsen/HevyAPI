@@ -1,5 +1,5 @@
 import { BaseHevyClient } from '../client';
-import type { Workout, WorkoutSummary, PostWorkoutsRequestBody, PaginatedWorkouts, PaginatedWorkoutEvents, PaginationParams } from '../types';
+import type { PaginatedWorkoutEvents, PaginatedWorkouts, PaginationParams, PostWorkoutsRequestBody, Workout, WorkoutSummary } from '../types';
 export declare class WorkoutsClient extends BaseHevyClient {
     getAll(params?: PaginationParams): Promise<PaginatedWorkouts>;
     getById(workoutId: string): Promise<Workout>;
