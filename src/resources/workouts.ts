@@ -1,4 +1,4 @@
-import { BaseHevyClient } from '../client';
+import { BaseHevyClient, type HevyClientConfig } from '../client';
 import type {
   PaginatedWorkoutEvents,
   PaginatedWorkouts,
@@ -10,6 +10,11 @@ import type {
 import { encodePathSegment } from '../utils/path';
 
 export class WorkoutsClient extends BaseHevyClient {
+  // biome-ignore lint/complexity/noUselessConstructor: Explicit constructor keeps Bun function coverage accurate for inherited clients.
+  constructor(config: HevyClientConfig) {
+    super(config);
+  }
+
   async getAll(params?: PaginationParams): Promise<PaginatedWorkouts> {
     return this.request<PaginatedWorkouts>({
       method: 'GET',

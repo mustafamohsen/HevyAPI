@@ -1,6 +1,7 @@
-import { BaseHevyClient } from '../client';
+import { BaseHevyClient, type HevyClientConfig } from '../client';
 import type { PaginatedRoutines, PaginationParams, PostRoutinesRequestBody, PutRoutinesRequestBody, Routine } from '../types';
 export declare class RoutinesClient extends BaseHevyClient {
+    constructor(config: HevyClientConfig);
     getAll(params?: PaginationParams): Promise<PaginatedRoutines>;
     getById(routineId: string): Promise<{
         routine: Routine;

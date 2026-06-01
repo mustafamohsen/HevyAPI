@@ -282,6 +282,9 @@ var encodePathSegment = (value) => encodeURIComponent(String(value));
 
 // src/resources/bodyMeasurements.ts
 class BodyMeasurementsClient extends BaseHevyClient {
+  constructor(config) {
+    super(config);
+  }
   async getAll(params) {
     return this.request({
       method: "GET",
@@ -316,6 +319,9 @@ class BodyMeasurementsClient extends BaseHevyClient {
 
 // src/resources/exerciseHistory.ts
 class ExerciseHistoryClient extends BaseHevyClient {
+  constructor(config) {
+    super(config);
+  }
   async getByExerciseTemplateId(exerciseTemplateId, params) {
     return this.request({
       method: "GET",
@@ -330,6 +336,9 @@ class ExerciseHistoryClient extends BaseHevyClient {
 
 // src/resources/exerciseTemplates.ts
 class ExerciseTemplatesClient extends BaseHevyClient {
+  constructor(config) {
+    super(config);
+  }
   async getAll(params) {
     return this.request({
       method: "GET",
@@ -357,6 +366,9 @@ class ExerciseTemplatesClient extends BaseHevyClient {
 
 // src/resources/routineFolders.ts
 class RoutineFoldersClient extends BaseHevyClient {
+  constructor(config) {
+    super(config);
+  }
   async getAll(params) {
     return this.request({
       method: "GET",
@@ -384,6 +396,9 @@ class RoutineFoldersClient extends BaseHevyClient {
 
 // src/resources/routines.ts
 class RoutinesClient extends BaseHevyClient {
+  constructor(config) {
+    super(config);
+  }
   async getAll(params) {
     return this.request({
       method: "GET",
@@ -418,6 +433,9 @@ class RoutinesClient extends BaseHevyClient {
 
 // src/resources/user.ts
 class UserClient extends BaseHevyClient {
+  constructor(config) {
+    super(config);
+  }
   async getInfo() {
     return this.request({
       method: "GET",
@@ -428,6 +446,9 @@ class UserClient extends BaseHevyClient {
 
 // src/resources/workouts.ts
 class WorkoutsClient extends BaseHevyClient {
+  constructor(config) {
+    super(config);
+  }
   async getAll(params) {
     return this.request({
       method: "GET",
@@ -511,4 +532,4 @@ export {
   AuthenticationError
 };
 
-//# debugId=D00085124785D4FE64756E2164756E21
+//# debugId=F827A6777F9CC60E64756E2164756E21
