@@ -1,10 +1,10 @@
 import type { HevyClientConfig } from './client';
 import { BaseHevyClient } from './client';
-import { WorkoutsClient } from './resources/workouts';
-import { RoutinesClient } from './resources/routines';
+import { ExerciseHistoryClient } from './resources/exerciseHistory';
 import { ExerciseTemplatesClient } from './resources/exerciseTemplates';
 import { RoutineFoldersClient } from './resources/routineFolders';
-import { ExerciseHistoryClient } from './resources/exerciseHistory';
+import { RoutinesClient } from './resources/routines';
+import { WorkoutsClient } from './resources/workouts';
 
 export class Hevy extends BaseHevyClient {
   public workouts: WorkoutsClient;
@@ -23,9 +23,9 @@ export class Hevy extends BaseHevyClient {
   }
 }
 
+export * from './errors';
 // Re-export types and errors for convenience
 export * from './types';
-export * from './errors';
 
 // Default export for convenience
 export default Hevy;

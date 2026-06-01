@@ -1,11 +1,11 @@
 import { BaseHevyClient } from '../client';
 import type {
+  PaginatedWorkoutEvents,
+  PaginatedWorkouts,
+  PaginationParams,
+  PostWorkoutsRequestBody,
   Workout,
   WorkoutSummary,
-  PostWorkoutsRequestBody,
-  PaginatedWorkouts,
-  PaginatedWorkoutEvents,
-  PaginationParams,
 } from '../types';
 
 export class WorkoutsClient extends BaseHevyClient {

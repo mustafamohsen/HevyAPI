@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Hevy, AuthenticationError, ValidationError, NotFoundError, RateLimitError, NetworkError, HevyAPIError, BaseHevyClient } from '../src/index';
+import { AuthenticationError, BaseHevyClient, Hevy, HevyAPIError, NetworkError, NotFoundError, RateLimitError, ValidationError } from '../src/index';
 
 // Simple mock for axios
 const mockAxios = {

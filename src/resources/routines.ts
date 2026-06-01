@@ -1,10 +1,10 @@
 import { BaseHevyClient } from '../client';
 import type {
-  Routine,
-  PostRoutinesRequestBody,
-  PutRoutinesRequestBody,
   PaginatedRoutines,
   PaginationParams,
+  PostRoutinesRequestBody,
+  PutRoutinesRequestBody,
+  Routine,
 } from '../types';
 
 export class RoutinesClient extends BaseHevyClient {

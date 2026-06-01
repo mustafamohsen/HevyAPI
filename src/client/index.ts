@@ -1,16 +1,16 @@
 import axios, {
-  type AxiosInstance,
   type AxiosError,
+  type AxiosInstance,
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios';
 import {
-  HevyAPIError,
   AuthenticationError,
-  ValidationError,
+  HevyAPIError,
+  NetworkError,
   NotFoundError,
   RateLimitError,
-  NetworkError,
+  ValidationError,
 } from '../errors';
 
 export interface HevyClientConfig {

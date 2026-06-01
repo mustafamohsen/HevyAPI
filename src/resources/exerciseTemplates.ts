@@ -1,7 +1,7 @@
 import { BaseHevyClient } from '../client';
 import type {
-  ExerciseTemplate,
   CreateCustomExerciseRequestBody,
+  ExerciseTemplate,
   PaginatedExerciseTemplates,
   PaginationParams,
 } from '../types';

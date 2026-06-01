@@ -1,9 +1,9 @@
 import { BaseHevyClient } from '../client';
 import type {
-  RoutineFolder,
-  PostRoutineFolderRequestBody,
   PaginatedRoutineFolders,
   PaginationParams,
+  PostRoutineFolderRequestBody,
+  RoutineFolder,
 } from '../types';
 
 export class RoutineFoldersClient extends BaseHevyClient {
