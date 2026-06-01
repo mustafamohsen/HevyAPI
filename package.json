@@ -33,7 +33,8 @@
     "smoke:esm": "node --input-type=module -e \"import Hevy, { Hevy as Named } from 'hevy-api'; if (typeof Hevy !== 'function' || Named !== Hevy) throw new Error('ESM package exports mismatch');\"",
     "pack:dry-run": "bun pm pack --dry-run",
     "llms:generate": "bun run scripts/generate-llms.ts",
-    "verify:ci": "bun run build && bun run smoke:cjs && bun run smoke:esm && bun run lint && bun run coverage:verify && bun run typecheck && bun install --frozen-lockfile --dry-run && bun audit --production && bun run pack:dry-run"
+    "docs:check": "bun run llms:generate && git diff --exit-code llms.txt llms-full.txt",
+    "verify:ci": "bun run build && bun run smoke:cjs && bun run smoke:esm && bun run lint && bun run coverage:verify && bun run typecheck && bun run docs:check && bun install --frozen-lockfile --dry-run && bun audit --production && bun run pack:dry-run"
   },
   "keywords": [
     "hevy",

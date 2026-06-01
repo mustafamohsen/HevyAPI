@@ -144,6 +144,7 @@ Use Bun for package management and scripts:
 - \`bun run typecheck\` - Run TypeScript without emitting
 - \`bun audit --production\` - Audit production dependencies
 - \`bun run pack:dry-run\` - Verify npm package contents
+- \`bun run docs:check\` - Verify regenerated LLM documentation is committed
 - \`bun run verify:ci\` - Run release verification gates
 - \`bun run llms:generate\` - Regenerate \`llms.txt\` and \`llms-full.txt\`
 

@@ -64,6 +64,11 @@ const records = readFileSync(lcovPath, 'utf8')
   })
   .filter((record) => record.file.startsWith('src/'));
 
+if (records.length === 0) {
+  console.error('Coverage report did not include any src/ records.');
+  process.exit(1);
+}
+
 const totals = records.reduce(
   (acc, record) => ({
     foundLines: acc.foundLines + record.foundLines,
@@ -74,9 +79,9 @@ const totals = records.reduce(
   { foundLines: 0, hitLines: 0, foundFunctions: 0, hitFunctions: 0 },
 );
 
-const lineCoverage = totals.foundLines === 0 ? requiredPercent : (totals.hitLines / totals.foundLines) * 100;
+const lineCoverage = totals.foundLines === 0 ? 0 : (totals.hitLines / totals.foundLines) * 100;
 const functionCoverage =
-  totals.foundFunctions === 0 ? requiredPercent : (totals.hitFunctions / totals.foundFunctions) * 100;
+  totals.foundFunctions === 0 ? 0 : (totals.hitFunctions / totals.foundFunctions) * 100;
 
 const uncoveredFiles = records.filter(
   (record) =>
