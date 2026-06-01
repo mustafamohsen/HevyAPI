@@ -2,11 +2,636 @@
 
 > Complete source code for the Hevy API TypeScript client library
 
+## File: src/client/index.ts
+
+```typescript
+import axios, {
+  type AxiosError,
+  type AxiosInstance,
+  type AxiosRequestConfig,
+  type InternalAxiosRequestConfig,
+} from 'axios';
+import {
+  AuthenticationError,
+  ConfigurationError,
+  HevyAPIError,
+  NetworkError,
+  NotFoundError,
+  RateLimitError,
+  ValidationError,
+} from '../errors';
+import { redactSensitiveData, sanitizeError } from '../utils/redaction';
+
+const OFFICIAL_BASE_URL = 'https://api.hevyapp.com';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
+export interface HevyClientConfig {
+  apiKey: string;
+  baseURL?: string;
+  timeout?: number;
+  trustBaseURL?: boolean;
+}
+
+export interface RequestOptions extends AxiosRequestConfig {
+  requiresAuth?: boolean;
+}
+
+export abstract class BaseHevyClient {
+  protected client: AxiosInstance;
+  protected apiKey: string;
+
+  constructor(config: HevyClientConfig) {
+    this.apiKey = config.apiKey;
+    const baseURL = this.resolveBaseURL(config);
+    this.client = axios.create({
+      baseURL,
+      timeout: config.timeout || 30000,
+      maxRedirects: 0,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    this.setupRequestInterceptor();
+    this.setupResponseInterceptor();
+  }
+
+  private resolveBaseURL(config: HevyClientConfig): string {
+    const baseURL = config.baseURL || OFFICIAL_BASE_URL;
+    let parsedBaseURL: URL;
+
+    try {
+      parsedBaseURL = new URL(baseURL);
+    } catch {
+      throw new ConfigurationError('Invalid baseURL. Provide a valid absolute URL.');
+    }
+
+    const officialOrigin = new URL(OFFICIAL_BASE_URL).origin;
+    if (parsedBaseURL.origin === officialOrigin) {
+      return baseURL;
+    }
+
+    if (config.trustBaseURL !== true) {
+      throw new ConfigurationError(
+        'Custom baseURL origins require trustBaseURL: true because the API key will be sent to that origin.',
+      );
+    }
+
+    const isLoopbackHTTP =
+      parsedBaseURL.protocol === 'http:' && LOOPBACK_HOSTS.has(parsedBaseURL.hostname);
+    if (parsedBaseURL.protocol !== 'https:' && !isLoopbackHTTP) {
+      throw new ConfigurationError(
+        'Custom baseURL origins must use HTTPS unless they are trusted HTTP loopback hosts.',
+      );
+    }
+
+    return baseURL;
+  }
+
+  private setupRequestInterceptor(): void {
+    this.client.interceptors.request.use(
+      (config: InternalAxiosRequestConfig) => {
+        config.headers.set('api-key', this.apiKey);
+        return config;
+      },
+      (error: unknown) => {
+        return Promise.reject(
+          new NetworkError('Failed to make request', this.sanitizeOriginalError(error)),
+        );
+      },
+    );
+  }
+
+  private setupResponseInterceptor(): void {
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error: AxiosError) => {
+        this.handleError(error);
+      },
+    );
+  }
+
+  private handleError(error: AxiosError): never {
+    if (!error.response) {
+      const isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
+      throw new NetworkError(
+        isTimeout ? 'Request timed out' : 'Network error occurred',
+        this.sanitizeOriginalError(error),
+      );
+    }
+
+    const status = error.response.status;
+    const responseData = this.sanitizeValue(error.response.data);
+
+    switch (status) {
+      case 400: {
+        const fieldErrors = this.extractFieldErrors(responseData);
+        throw new ValidationError('Validation failed', fieldErrors);
+      }
+      case 401:
+      case 403:
+        throw new AuthenticationError('Authentication failed. Please verify your API key.');
+      case 404:
+        throw new NotFoundError('Resource not found');
+      case 429: {
+        const retryAfter = this.parseRetryAfter(
+          error.response.headers['retry-after'] as string | undefined,
+        );
+        throw new RateLimitError(retryAfter);
+      }
+      default:
+        throw new HevyAPIError(`HTTP error ${status}`, status, responseData);
+    }
+  }
+
+  private parseRetryAfter(header?: string): number {
+    if (!header) return 5000;
+    const seconds = parseInt(header, 10);
+    return Number.isNaN(seconds) ? 5000 : seconds * 1000;
+  }
+
+  private extractFieldErrors(responseData: unknown): Record<string, string> | undefined {
+    if (
+      responseData &&
+      typeof responseData === 'object' &&
+      (responseData as Record<string, unknown>).errors
+    ) {
+      const errors = (responseData as Record<string, unknown>).errors;
+      if (typeof errors === 'object' && errors !== null) {
+        return Object.entries(errors as Record<string, unknown>).reduce(
+          (acc, [key, value]) => {
+            acc[key] = String(this.sanitizeValue(value));
+            return acc;
+          },
+          {} as Record<string, string>,
+        );
+      }
+    }
+    return undefined;
+  }
+
+  private sanitizeValue(value: unknown): unknown {
+    return redactSensitiveData(value, { secrets: [this.apiKey] });
+  }
+
+  private sanitizeOriginalError(error: unknown): Error {
+    if (error instanceof Error) {
+      return sanitizeError(error, { secrets: [this.apiKey] });
+    }
+
+    return new Error(String(this.sanitizeValue(error)));
+  }
+
+  protected async request<T>(options: RequestOptions): Promise<T> {
+    try {
+      const response = await this.client.request<T>(options);
+      return response.data;
+    } catch (error) {
+      if (error instanceof HevyAPIError || error instanceof NetworkError) {
+        throw error;
+      }
+      throw new NetworkError('Unknown error occurred', this.sanitizeOriginalError(error));
+    }
+  }
+}
+```
+
+## File: src/errors/index.ts
+
+```typescript
+export class HevyAPIError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public response?: unknown,
+  ) {
+    super(message);
+    this.name = 'HevyAPIError';
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      statusCode: this.statusCode,
+      response: this.response,
+    };
+  }
+}
+
+export class AuthenticationError extends HevyAPIError {
+  constructor(message: string = 'Authentication failed. Please verify your API key.') {
+    super(message, 401);
+    this.name = 'AuthenticationError';
+  }
+}
+
+export class ValidationError extends HevyAPIError {
+  constructor(
+    message: string = 'Validation failed',
+    public fieldErrors?: Record<string, string>,
+  ) {
+    super(message, 400);
+    this.name = 'ValidationError';
+  }
+}
+
+export class NotFoundError extends HevyAPIError {
+  constructor(message: string = 'Resource not found') {
+    super(message, 404);
+    this.name = 'NotFoundError';
+  }
+}
+
+export class RateLimitError extends HevyAPIError {
+  constructor(public retryAfter: number = 5000) {
+    super(`Rate limit exceeded. Please retry after ${retryAfter}ms`, 429);
+    this.name = 'RateLimitError';
+  }
+}
+
+export class ForbiddenError extends HevyAPIError {
+  constructor(message: string = 'Access forbidden') {
+    super(message, 403);
+    this.name = 'ForbiddenError';
+  }
+}
+
+export class ConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigurationError';
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+    };
+  }
+}
+
+export class NetworkError extends Error {
+  constructor(
+    message: string,
+    public originalError?: Error,
+  ) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      originalError: this.originalError,
+    };
+  }
+}
+```
+
+## File: src/index.ts
+
+```typescript
+import type { HevyClientConfig } from './client';
+import { BaseHevyClient } from './client';
+
+export type { HevyClientConfig } from './client';
+
+import { BodyMeasurementsClient } from './resources/bodyMeasurements';
+import { ExerciseHistoryClient } from './resources/exerciseHistory';
+import { ExerciseTemplatesClient } from './resources/exerciseTemplates';
+import { RoutineFoldersClient } from './resources/routineFolders';
+import { RoutinesClient } from './resources/routines';
+import { UserClient } from './resources/user';
+import { WorkoutsClient } from './resources/workouts';
+
+export class Hevy extends BaseHevyClient {
+  public workouts: WorkoutsClient;
+  public routines: RoutinesClient;
+  public exerciseTemplates: ExerciseTemplatesClient;
+  public routineFolders: RoutineFoldersClient;
+  public exerciseHistory: ExerciseHistoryClient;
+  public user: UserClient;
+  public bodyMeasurements: BodyMeasurementsClient;
+
+  constructor(config: HevyClientConfig) {
+    super(config);
+    this.workouts = new WorkoutsClient(config);
+    this.routines = new RoutinesClient(config);
+    this.exerciseTemplates = new ExerciseTemplatesClient(config);
+    this.routineFolders = new RoutineFoldersClient(config);
+    this.exerciseHistory = new ExerciseHistoryClient(config);
+    this.user = new UserClient(config);
+    this.bodyMeasurements = new BodyMeasurementsClient(config);
+  }
+}
+
+export * from './errors';
+// Re-export types and errors for convenience
+export * from './types';
+
+// Default export for convenience
+export default Hevy;
+```
+
+## File: src/resources/bodyMeasurements.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  BodyMeasurement,
+  PaginatedBodyMeasurements,
+  PaginationParams,
+  PutBodyMeasurement,
+} from '../types';
+import { encodePathSegment } from '../utils/path';
+
+export class BodyMeasurementsClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedBodyMeasurements> {
+    return this.request<PaginatedBodyMeasurements>({
+      method: 'GET',
+      url: '/v1/body_measurements',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 10,
+      },
+    });
+  }
+
+  async create(bodyMeasurement: BodyMeasurement): Promise<void> {
+    return this.request<void>({
+      method: 'POST',
+      url: '/v1/body_measurements',
+      data: bodyMeasurement,
+    });
+  }
+
+  async getByDate(date: string): Promise<BodyMeasurement> {
+    return this.request<BodyMeasurement>({
+      method: 'GET',
+      url: `/v1/body_measurements/${encodePathSegment(date)}`,
+    });
+  }
+
+  async update(date: string, bodyMeasurement: PutBodyMeasurement): Promise<void> {
+    return this.request<void>({
+      method: 'PUT',
+      url: `/v1/body_measurements/${encodePathSegment(date)}`,
+      data: bodyMeasurement,
+    });
+  }
+}
+```
+
+## File: src/resources/exerciseHistory.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type { ExerciseHistoryResponse } from '../types';
+import { encodePathSegment } from '../utils/path';
+
+export class ExerciseHistoryClient extends BaseHevyClient {
+  async getByExerciseTemplateId(
+    exerciseTemplateId: string,
+    params?: { start_date?: string; end_date?: string },
+  ): Promise<ExerciseHistoryResponse> {
+    return this.request<ExerciseHistoryResponse>({
+      method: 'GET',
+      url: `/v1/exercise_history/${encodePathSegment(exerciseTemplateId)}`,
+      params: {
+        start_date: params?.start_date,
+        end_date: params?.end_date,
+      },
+    });
+  }
+}
+```
+
+## File: src/resources/exerciseTemplates.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  CreateCustomExerciseRequestBody,
+  ExerciseTemplate,
+  PaginatedExerciseTemplates,
+  PaginationParams,
+} from '../types';
+import { encodePathSegment } from '../utils/path';
+
+export class ExerciseTemplatesClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedExerciseTemplates> {
+    return this.request<PaginatedExerciseTemplates>({
+      method: 'GET',
+      url: '/v1/exercise_templates',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 5,
+      },
+    });
+  }
+
+  async getById(exerciseTemplateId: string): Promise<ExerciseTemplate> {
+    return this.request<ExerciseTemplate>({
+      method: 'GET',
+      url: `/v1/exercise_templates/${encodePathSegment(exerciseTemplateId)}`,
+    });
+  }
+
+  async create(exercise: CreateCustomExerciseRequestBody): Promise<{ id: number }> {
+    return this.request<{ id: number }>({
+      method: 'POST',
+      url: '/v1/exercise_templates',
+      data: exercise,
+    });
+  }
+}
+```
+
+## File: src/resources/routineFolders.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  PaginatedRoutineFolders,
+  PaginationParams,
+  PostRoutineFolderRequestBody,
+  RoutineFolder,
+} from '../types';
+import { encodePathSegment } from '../utils/path';
+
+export class RoutineFoldersClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedRoutineFolders> {
+    return this.request<PaginatedRoutineFolders>({
+      method: 'GET',
+      url: '/v1/routine_folders',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 5,
+      },
+    });
+  }
+
+  async getById(folderId: string | number): Promise<RoutineFolder> {
+    return this.request<RoutineFolder>({
+      method: 'GET',
+      url: `/v1/routine_folders/${encodePathSegment(folderId)}`,
+    });
+  }
+
+  async create(folder: PostRoutineFolderRequestBody): Promise<RoutineFolder> {
+    return this.request<RoutineFolder>({
+      method: 'POST',
+      url: '/v1/routine_folders',
+      data: folder,
+    });
+  }
+}
+```
+
+## File: src/resources/routines.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  PaginatedRoutines,
+  PaginationParams,
+  PostRoutinesRequestBody,
+  PutRoutinesRequestBody,
+  Routine,
+} from '../types';
+import { encodePathSegment } from '../utils/path';
+
+export class RoutinesClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedRoutines> {
+    return this.request<PaginatedRoutines>({
+      method: 'GET',
+      url: '/v1/routines',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 5,
+      },
+    });
+  }
+
+  async getById(routineId: string): Promise<{ routine: Routine }> {
+    return this.request<{ routine: Routine }>({
+      method: 'GET',
+      url: `/v1/routines/${encodePathSegment(routineId)}`,
+    });
+  }
+
+  async create(routine: PostRoutinesRequestBody): Promise<Routine> {
+    return this.request<Routine>({
+      method: 'POST',
+      url: '/v1/routines',
+      data: routine,
+    });
+  }
+
+  async update(routineId: string, routine: PutRoutinesRequestBody): Promise<Routine> {
+    return this.request<Routine>({
+      method: 'PUT',
+      url: `/v1/routines/${encodePathSegment(routineId)}`,
+      data: routine,
+    });
+  }
+}
+```
+
+## File: src/resources/user.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type { UserInfoResponse } from '../types';
+
+export class UserClient extends BaseHevyClient {
+  async getInfo(): Promise<UserInfoResponse> {
+    return this.request<UserInfoResponse>({
+      method: 'GET',
+      url: '/v1/user/info',
+    });
+  }
+}
+```
+
+## File: src/resources/workouts.ts
+
+```typescript
+import { BaseHevyClient } from '../client';
+import type {
+  PaginatedWorkoutEvents,
+  PaginatedWorkouts,
+  PaginationParams,
+  PostWorkoutsRequestBody,
+  Workout,
+  WorkoutSummary,
+} from '../types';
+import { encodePathSegment } from '../utils/path';
+
+export class WorkoutsClient extends BaseHevyClient {
+  async getAll(params?: PaginationParams): Promise<PaginatedWorkouts> {
+    return this.request<PaginatedWorkouts>({
+      method: 'GET',
+      url: '/v1/workouts',
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 5,
+      },
+    });
+  }
+
+  async getById(workoutId: string): Promise<Workout> {
+    return this.request<Workout>({
+      method: 'GET',
+      url: `/v1/workouts/${encodePathSegment(workoutId)}`,
+    });
+  }
+
+  async count(): Promise<WorkoutSummary> {
+    return this.request<WorkoutSummary>({
+      method: 'GET',
+      url: '/v1/workouts/count',
+    });
+  }
+
+  async getEvents(params: PaginationParams & { since?: string }): Promise<PaginatedWorkoutEvents> {
+    return this.request<PaginatedWorkoutEvents>({
+      method: 'GET',
+      url: '/v1/workouts/events',
+      params: {
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 5,
+        since: params.since,
+      },
+    });
+  }
+
+  async create(workout: PostWorkoutsRequestBody): Promise<Workout> {
+    return this.request<Workout>({
+      method: 'POST',
+      url: '/v1/workouts',
+      data: workout,
+    });
+  }
+
+  async update(workoutId: string, workout: PostWorkoutsRequestBody): Promise<Workout> {
+    return this.request<Workout>({
+      method: 'PUT',
+      url: `/v1/workouts/${encodePathSegment(workoutId)}`,
+      data: workout,
+    });
+  }
+}
+```
+
 ## File: src/types/index.ts
 
 ```typescript
 // Set Types
 export type SetType = 'warmup' | 'normal' | 'failure' | 'dropset';
+export type RpeValue = 6 | 7 | 7.5 | 8 | 8.5 | 9 | 9.5 | 10;
 
 export interface Set {
   index: number;
@@ -26,7 +651,7 @@ export interface PostWorkoutsRequestSet {
   distance_meters: number | null;
   duration_seconds: number | null;
   custom_metric: number | null;
-  rpe?: 6 | 7 | 7.5 | 8 | 8.5 | 9 | 9.5 | 10;
+  rpe?: RpeValue | null;
 }
 
 export interface RepRange {
@@ -303,6 +928,50 @@ export interface PaginatedRoutineFolders {
   routine_folders: RoutineFolder[];
 }
 
+// User Types
+export interface UserInfo {
+  id?: string;
+  name?: string;
+  url?: string;
+}
+
+export interface UserInfoResponse {
+  data?: UserInfo;
+}
+
+// Body Measurement Types
+export interface BodyMeasurementValues {
+  weight_kg?: number | null;
+  lean_mass_kg?: number | null;
+  fat_percent?: number | null;
+  neck_cm?: number | null;
+  shoulder_cm?: number | null;
+  chest_cm?: number | null;
+  left_bicep_cm?: number | null;
+  right_bicep_cm?: number | null;
+  left_forearm_cm?: number | null;
+  right_forearm_cm?: number | null;
+  abdomen?: number | null;
+  waist?: number | null;
+  hips?: number | null;
+  left_thigh?: number | null;
+  right_thigh?: number | null;
+  left_calf?: number | null;
+  right_calf?: number | null;
+}
+
+export interface BodyMeasurement extends BodyMeasurementValues {
+  date: string;
+}
+
+export type PutBodyMeasurement = BodyMeasurementValues;
+
+export interface PaginatedBodyMeasurements {
+  page: number;
+  page_count: number;
+  body_measurements: BodyMeasurement[];
+}
+
 // Pagination Types
 export interface PaginationParams {
   page?: number;
@@ -315,494 +984,112 @@ export interface ApiErrorResponse {
 }
 ```
 
-## File: src/errors/index.ts
+## File: src/utils/path.ts
 
 ```typescript
-export class HevyAPIError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number,
-    public response?: unknown,
-  ) {
-    super(message);
-    this.name = 'HevyAPIError';
-  }
-}
-
-export class AuthenticationError extends HevyAPIError {
-  constructor(message: string = 'Authentication failed. Please verify your API key.') {
-    super(message, 401);
-    this.name = 'AuthenticationError';
-  }
-}
-
-export class ValidationError extends HevyAPIError {
-  constructor(
-    message: string = 'Validation failed',
-    public fieldErrors?: Record<string, string>,
-  ) {
-    super(message, 400);
-    this.name = 'ValidationError';
-  }
-}
-
-export class NotFoundError extends HevyAPIError {
-  constructor(message: string = 'Resource not found') {
-    super(message, 404);
-    this.name = 'NotFoundError';
-  }
-}
-
-export class RateLimitError extends HevyAPIError {
-  constructor(public retryAfter: number = 5000) {
-    super(`Rate limit exceeded. Please retry after ${retryAfter}ms`, 429);
-    this.name = 'RateLimitError';
-  }
-}
-
-export class ForbiddenError extends HevyAPIError {
-  constructor(message: string = 'Access forbidden') {
-    super(message, 403);
-    this.name = 'ForbiddenError';
-  }
-}
-
-export class NetworkError extends Error {
-  constructor(
-    message: string,
-    public originalError?: Error,
-  ) {
-    super(message);
-    this.name = 'NetworkError';
-  }
-}
+export const encodePathSegment = (value: string | number): string =>
+  encodeURIComponent(String(value));
 ```
 
-## File: src/client/index.ts
+## File: src/utils/redaction.ts
 
 ```typescript
-import axios, {
-  type AxiosInstance,
-  type AxiosError,
-  type AxiosRequestConfig,
-  type InternalAxiosRequestConfig,
-} from 'axios';
-import {
-  HevyAPIError,
-  AuthenticationError,
-  ValidationError,
-  NotFoundError,
-  RateLimitError,
-  NetworkError,
-} from '../errors';
+const REDACTED_VALUE = '[REDACTED]';
+const SENSITIVE_KEYS = new Set([
+  'api-key',
+  'apikey',
+  'authorization',
+  'x-api-key',
+  'token',
+  'access_token',
+  'refresh_token',
+  'password',
+  'secret',
+]);
+const MAX_REDACTION_DEPTH = 8;
 
-export interface HevyClientConfig {
-  apiKey: string;
-  baseURL?: string;
-  timeout?: number;
+export interface RedactionOptions {
+  secrets?: readonly string[];
 }
 
-export interface RequestOptions extends AxiosRequestConfig {
-  requiresAuth?: boolean;
-}
+const isSensitiveKey = (key: string): boolean => SENSITIVE_KEYS.has(key.toLowerCase());
 
-export abstract class BaseHevyClient {
-  protected client: AxiosInstance;
-  protected apiKey: string;
-
-  constructor(config: HevyClientConfig) {
-    this.apiKey = config.apiKey;
-    this.client = axios.create({
-      baseURL: config.baseURL || 'https://api.hevyapp.com',
-      timeout: config.timeout || 30000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    this.setupRequestInterceptor();
-    this.setupResponseInterceptor();
-  }
-
-  private setupRequestInterceptor(): void {
-    this.client.interceptors.request.use(
-      (config: InternalAxiosRequestConfig) => {
-        config.headers.set('api-key', this.apiKey);
-        return config;
-      },
-      (error: unknown) => {
-        return Promise.reject(new NetworkError('Failed to make request', error as Error));
-      },
-    );
-  }
-
-  private setupResponseInterceptor(): void {
-    this.client.interceptors.response.use(
-      (response) => response,
-      (error: AxiosError) => {
-        this.handleError(error);
-      },
-    );
-  }
-
-  private handleError(error: AxiosError): never {
-    if (!error.response) {
-      const isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
-      throw new NetworkError(
-        isTimeout ? 'Request timed out' : 'Network error occurred',
-        error as Error,
-      );
-    }
-
-    const status = error.response.status;
-    const responseData = error.response.data;
-
-    switch (status) {
-      case 400: {
-        const fieldErrors = this.extractFieldErrors(responseData);
-        throw new ValidationError('Validation failed', fieldErrors);
-      }
-      case 401:
-      case 403:
-        throw new AuthenticationError('Authentication failed. Please verify your API key.');
-      case 404:
-        throw new NotFoundError('Resource not found');
-      case 429: {
-        const retryAfter = this.parseRetryAfter(
-          error.response.headers['retry-after'] as string | undefined,
-        );
-        throw new RateLimitError(retryAfter);
-      }
-      default:
-        throw new HevyAPIError(`HTTP error ${status}`, status, responseData);
+const redactString = (value: string, secrets: readonly string[]): string => {
+  let redacted = value;
+  for (const secret of secrets) {
+    if (secret.length > 0) {
+      redacted = redacted.split(secret).join(REDACTED_VALUE);
     }
   }
+  return redacted;
+};
 
-  private parseRetryAfter(header?: string): number {
-    if (!header) return 5000;
-    const seconds = parseInt(header, 10);
-    return Number.isNaN(seconds) ? 5000 : seconds * 1000;
-  }
+export const redactSensitiveData = (value: unknown, options: RedactionOptions = {}): unknown => {
+  const secrets = options.secrets ?? [];
+  const seen = new WeakSet<object>();
 
-  private extractFieldErrors(responseData: unknown): Record<string, string> | undefined {
+  const redact = (currentValue: unknown, depth: number): unknown => {
+    if (typeof currentValue === 'string') {
+      return redactString(currentValue, secrets);
+    }
+
     if (
-      responseData &&
-      typeof responseData === 'object' &&
-      (responseData as Record<string, unknown>).errors
+      currentValue === null ||
+      typeof currentValue === 'number' ||
+      typeof currentValue === 'boolean' ||
+      typeof currentValue === 'undefined'
     ) {
-      const errors = (responseData as Record<string, unknown>).errors;
-      if (typeof errors === 'object' && errors !== null) {
-        return Object.entries(errors as Record<string, unknown>).reduce(
-          (acc, [key, value]) => {
-            acc[key] = String(value);
-            return acc;
-          },
-          {} as Record<string, string>,
-        );
-      }
+      return currentValue;
     }
-    return undefined;
-  }
 
-  protected async request<T>(options: RequestOptions): Promise<T> {
-    try {
-      const response = await this.client.request<T>(options);
-      return response.data;
-    } catch (error) {
-      if (error instanceof HevyAPIError || error instanceof NetworkError) {
-        throw error;
-      }
-      throw new NetworkError('Unknown error occurred', error as Error);
+    if (typeof currentValue !== 'object') {
+      return String(currentValue);
     }
+
+    if (depth >= MAX_REDACTION_DEPTH) {
+      return '[REDACTED_OBJECT]';
+    }
+
+    if (seen.has(currentValue)) {
+      return '[Circular]';
+    }
+    seen.add(currentValue);
+
+    if (currentValue instanceof Error) {
+      return sanitizeError(currentValue, options, depth + 1, redact);
+    }
+
+    if (Array.isArray(currentValue)) {
+      return currentValue.map((item) => redact(item, depth + 1));
+    }
+
+    const redactedObject: Record<string, unknown> = {};
+    for (const [key, objectValue] of Object.entries(currentValue as Record<string, unknown>)) {
+      redactedObject[key] = isSensitiveKey(key) ? REDACTED_VALUE : redact(objectValue, depth + 1);
+    }
+    return redactedObject;
+  };
+
+  return redact(value, 0);
+};
+
+export const sanitizeError = (
+  error: Error,
+  options: RedactionOptions = {},
+  depth = 0,
+  redact: (value: unknown, depth: number) => unknown = (value) =>
+    redactSensitiveData(value, options),
+): Error => {
+  const sanitizedError = new Error(redactString(error.message, options.secrets ?? []));
+  sanitizedError.name = error.name;
+  sanitizedError.stack = redactString(error.stack ?? '', options.secrets ?? []);
+
+  for (const [key, value] of Object.entries(error as unknown as Record<string, unknown>)) {
+    (sanitizedError as unknown as Record<string, unknown>)[key] = isSensitiveKey(key)
+      ? REDACTED_VALUE
+      : redact(value, depth + 1);
   }
-}
+
+  return sanitizedError;
+};
 ```
-
-## File: src/resources/workouts.ts
-
-```typescript
-import { BaseHevyClient } from '../client';
-import type {
-  Workout,
-  WorkoutSummary,
-  PostWorkoutsRequestBody,
-  PaginatedWorkouts,
-  PaginatedWorkoutEvents,
-  PaginationParams,
-} from '../types';
-
-export class WorkoutsClient extends BaseHevyClient {
-  async getAll(params?: PaginationParams): Promise<PaginatedWorkouts> {
-    return this.request<PaginatedWorkouts>({
-      method: 'GET',
-      url: '/v1/workouts',
-      params: {
-        page: params?.page ?? 1,
-        pageSize: params?.pageSize ?? 5,
-      },
-    });
-  }
-
-  async getById(workoutId: string): Promise<Workout> {
-    return this.request<Workout>({
-      method: 'GET',
-      url: `/v1/workouts/${workoutId}`,
-    });
-  }
-
-  async count(): Promise<WorkoutSummary> {
-    return this.request<WorkoutSummary>({
-      method: 'GET',
-      url: '/v1/workouts/count',
-    });
-  }
-
-  async getEvents(params: PaginationParams & { since?: string }): Promise<PaginatedWorkoutEvents> {
-    return this.request<PaginatedWorkoutEvents>({
-      method: 'GET',
-      url: '/v1/workouts/events',
-      params: {
-        page: params.page ?? 1,
-        pageSize: params.pageSize ?? 5,
-        since: params.since,
-      },
-    });
-  }
-
-  async create(workout: PostWorkoutsRequestBody): Promise<Workout> {
-    return this.request<Workout>({
-      method: 'POST',
-      url: '/v1/workouts',
-      data: workout,
-    });
-  }
-
-  async update(workoutId: string, workout: PostWorkoutsRequestBody): Promise<Workout> {
-    return this.request<Workout>({
-      method: 'PUT',
-      url: `/v1/workouts/${workoutId}`,
-      data: workout,
-    });
-  }
-}
-```
-
-## File: src/resources/routines.ts
-
-```typescript
-import { BaseHevyClient } from '../client';
-import type {
-  Routine,
-  PostRoutinesRequestBody,
-  PutRoutinesRequestBody,
-  PaginatedRoutines,
-  PaginationParams,
-} from '../types';
-
-export class RoutinesClient extends BaseHevyClient {
-  async getAll(params?: PaginationParams): Promise<PaginatedRoutines> {
-    return this.request<PaginatedRoutines>({
-      method: 'GET',
-      url: '/v1/routines',
-      params: {
-        page: params?.page ?? 1,
-        pageSize: params?.pageSize ?? 5,
-      },
-    });
-  }
-
-  async getById(routineId: string): Promise<{ routine: Routine }> {
-    return this.request<{ routine: Routine }>({
-      method: 'GET',
-      url: `/v1/routines/${routineId}`,
-    });
-  }
-
-  async create(routine: PostRoutinesRequestBody): Promise<Routine> {
-    return this.request<Routine>({
-      method: 'POST',
-      url: '/v1/routines',
-      data: routine,
-    });
-  }
-
-  async update(routineId: string, routine: PutRoutinesRequestBody): Promise<Routine> {
-    return this.request<Routine>({
-      method: 'PUT',
-      url: `/v1/routines/${routineId}`,
-      data: routine,
-    });
-  }
-}
-```
-
-## File: src/resources/exerciseTemplates.ts
-
-```typescript
-import { BaseHevyClient } from '../client';
-import type {
-  ExerciseTemplate,
-  CreateCustomExerciseRequestBody,
-  PaginatedExerciseTemplates,
-  PaginationParams,
-} from '../types';
-
-export class ExerciseTemplatesClient extends BaseHevyClient {
-  async getAll(params?: PaginationParams): Promise<PaginatedExerciseTemplates> {
-    return this.request<PaginatedExerciseTemplates>({
-      method: 'GET',
-      url: '/v1/exercise_templates',
-      params: {
-        page: params?.page ?? 1,
-        pageSize: params?.pageSize ?? 5,
-      },
-    });
-  }
-
-  async getById(exerciseTemplateId: string): Promise<ExerciseTemplate> {
-    return this.request<ExerciseTemplate>({
-      method: 'GET',
-      url: `/v1/exercise_templates/${exerciseTemplateId}`,
-    });
-  }
-
-  async create(exercise: CreateCustomExerciseRequestBody): Promise<{ id: number }> {
-    return this.request<{ id: number }>({
-      method: 'POST',
-      url: '/v1/exercise_templates',
-      data: exercise,
-    });
-  }
-}
-```
-
-## File: src/resources/routineFolders.ts
-
-```typescript
-import { BaseHevyClient } from '../client';
-import type {
-  RoutineFolder,
-  PostRoutineFolderRequestBody,
-  PaginatedRoutineFolders,
-  PaginationParams,
-} from '../types';
-
-export class RoutineFoldersClient extends BaseHevyClient {
-  async getAll(params?: PaginationParams): Promise<PaginatedRoutineFolders> {
-    return this.request<PaginatedRoutineFolders>({
-      method: 'GET',
-      url: '/v1/routine_folders',
-      params: {
-        page: params?.page ?? 1,
-        pageSize: params?.pageSize ?? 5,
-      },
-    });
-  }
-
-  async getById(folderId: string): Promise<RoutineFolder> {
-    return this.request<RoutineFolder>({
-      method: 'GET',
-      url: `/v1/routine_folders/${folderId}`,
-    });
-  }
-
-  async create(folder: PostRoutineFolderRequestBody): Promise<RoutineFolder> {
-    return this.request<RoutineFolder>({
-      method: 'POST',
-      url: '/v1/routine_folders',
-      data: folder,
-    });
-  }
-}
-```
-
-## File: src/resources/exerciseHistory.ts
-
-```typescript
-import { BaseHevyClient } from '../client';
-import type { ExerciseHistoryResponse } from '../types';
-
-export class ExerciseHistoryClient extends BaseHevyClient {
-  async getByExerciseTemplateId(
-    exerciseTemplateId: string,
-    params?: { start_date?: string; end_date?: string },
-  ): Promise<ExerciseHistoryResponse> {
-    return this.request<ExerciseHistoryResponse>({
-      method: 'GET',
-      url: `/v1/exercise_history/${exerciseTemplateId}`,
-      params: {
-        start_date: params?.start_date,
-        end_date: params?.end_date,
-      },
-    });
-  }
-}
-```
-
-## File: src/index.ts
-
-```typescript
-import type { HevyClientConfig } from './client';
-import { BaseHevyClient } from './client';
-import { WorkoutsClient } from './resources/workouts';
-import { RoutinesClient } from './resources/routines';
-import { ExerciseTemplatesClient } from './resources/exerciseTemplates';
-import { RoutineFoldersClient } from './resources/routineFolders';
-import { ExerciseHistoryClient } from './resources/exerciseHistory';
-
-export class Hevy extends BaseHevyClient {
-  public workouts: WorkoutsClient;
-  public routines: RoutinesClient;
-  public exerciseTemplates: ExerciseTemplatesClient;
-  public routineFolders: RoutineFoldersClient;
-  public exerciseHistory: ExerciseHistoryClient;
-
-  constructor(config: HevyClientConfig) {
-    super(config);
-    this.workouts = new WorkoutsClient(config);
-    this.routines = new RoutinesClient(config);
-    this.exerciseTemplates = new ExerciseTemplatesClient(config);
-    this.routineFolders = new RoutineFoldersClient(config);
-    this.exerciseHistory = new ExerciseHistoryClient(config);
-  }
-}
-
-// Re-export types and errors for convenience
-export * from './types';
-export * from './errors';
-
-// Default export for convenience
-export default Hevy;
-```
-
-## Usage Example
-
-```typescript
-import Hevy from './src/index';
-
-const client = new Hevy({
-  apiKey: 'your-api-key',
-});
-
-// Get all workouts
-const workouts = await client.workouts.getAll({ page: 1, pageSize: 10 });
-
-// Get a single workout
-const workout = await client.workouts.getById('workout-id');
-
-// Create a new workout
-const newWorkout = await client.workouts.create({
-  workout: {
-    title: 'My Workout',
-    start_time: '2024-01-01T10:00:00Z',
-    end_time: '2024-01-01T11:00:00Z',
-    exercises: [],
-  },
-});
-```
-
-## Testing
-
-The project includes comprehensive tests in `tests/client.test.ts` with 100% coverage of error handling scenarios.
-
-Run tests with: `bun test`

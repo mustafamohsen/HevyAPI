@@ -180,6 +180,12 @@ This project includes `llms.txt` and `llms-full.txt` files designed to provide A
 - **llms.txt** - High-level overview, API endpoints, types, error handling, and development workflow
 - **llms-full.txt** - Complete source code of all `src/` files for full context
 
+Regenerate both files after source or public documentation changes:
+
+```bash
+bun run llms:generate
+```
+
 These files are useful for:
 - AI coding assistants that need to understand the library structure
 - Documentation generation tools

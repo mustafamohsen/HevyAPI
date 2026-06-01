@@ -31,6 +31,7 @@
     "smoke:cjs": "node -e \"const pkg = require('./'); if (typeof pkg.default !== 'function' || pkg.Hevy !== pkg.default) throw new Error('CJS package exports mismatch');\"",
     "smoke:esm": "node --input-type=module -e \"import Hevy, { Hevy as Named } from 'hevy-api'; if (typeof Hevy !== 'function' || Named !== Hevy) throw new Error('ESM package exports mismatch');\"",
     "pack:dry-run": "bun pm pack --dry-run",
+    "llms:generate": "bun run scripts/generate-llms.ts",
     "verify:ci": "bun run build && bun run smoke:cjs && bun run smoke:esm && bun run lint && bun test && bun run typecheck && bun install --frozen-lockfile --dry-run && bun audit --production && bun run pack:dry-run"
   },
   "keywords": [
