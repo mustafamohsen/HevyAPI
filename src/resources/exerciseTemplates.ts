@@ -5,6 +5,7 @@ import type {
   PaginatedExerciseTemplates,
   PaginationParams,
 } from '../types';
+import { encodePathSegment } from '../utils/path';
 
 export class ExerciseTemplatesClient extends BaseHevyClient {
   async getAll(params?: PaginationParams): Promise<PaginatedExerciseTemplates> {
@@ -21,7 +22,7 @@ export class ExerciseTemplatesClient extends BaseHevyClient {
   async getById(exerciseTemplateId: string): Promise<ExerciseTemplate> {
     return this.request<ExerciseTemplate>({
       method: 'GET',
-      url: `/v1/exercise_templates/${exerciseTemplateId}`,
+      url: `/v1/exercise_templates/${encodePathSegment(exerciseTemplateId)}`,
     });
   }
 

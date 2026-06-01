@@ -6,6 +6,7 @@ import type {
   PutRoutinesRequestBody,
   Routine,
 } from '../types';
+import { encodePathSegment } from '../utils/path';
 
 export class RoutinesClient extends BaseHevyClient {
   async getAll(params?: PaginationParams): Promise<PaginatedRoutines> {
@@ -22,7 +23,7 @@ export class RoutinesClient extends BaseHevyClient {
   async getById(routineId: string): Promise<{ routine: Routine }> {
     return this.request<{ routine: Routine }>({
       method: 'GET',
-      url: `/v1/routines/${routineId}`,
+      url: `/v1/routines/${encodePathSegment(routineId)}`,
     });
   }
 
@@ -37,7 +38,7 @@ export class RoutinesClient extends BaseHevyClient {
   async update(routineId: string, routine: PutRoutinesRequestBody): Promise<Routine> {
     return this.request<Routine>({
       method: 'PUT',
-      url: `/v1/routines/${routineId}`,
+      url: `/v1/routines/${encodePathSegment(routineId)}`,
       data: routine,
     });
   }

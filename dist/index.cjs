@@ -325,12 +325,49 @@ class BaseHevyClient {
   }
 }
 
+// src/utils/path.ts
+var encodePathSegment = (value) => encodeURIComponent(String(value));
+
+// src/resources/bodyMeasurements.ts
+class BodyMeasurementsClient extends BaseHevyClient {
+  async getAll(params) {
+    return this.request({
+      method: "GET",
+      url: "/v1/body_measurements",
+      params: {
+        page: params?.page ?? 1,
+        pageSize: params?.pageSize ?? 10
+      }
+    });
+  }
+  async create(bodyMeasurement) {
+    return this.request({
+      method: "POST",
+      url: "/v1/body_measurements",
+      data: bodyMeasurement
+    });
+  }
+  async getByDate(date) {
+    return this.request({
+      method: "GET",
+      url: `/v1/body_measurements/${encodePathSegment(date)}`
+    });
+  }
+  async update(date, bodyMeasurement) {
+    return this.request({
+      method: "PUT",
+      url: `/v1/body_measurements/${encodePathSegment(date)}`,
+      data: bodyMeasurement
+    });
+  }
+}
+
 // src/resources/exerciseHistory.ts
 class ExerciseHistoryClient extends BaseHevyClient {
   async getByExerciseTemplateId(exerciseTemplateId, params) {
     return this.request({
       method: "GET",
-      url: `/v1/exercise_history/${exerciseTemplateId}`,
+      url: `/v1/exercise_history/${encodePathSegment(exerciseTemplateId)}`,
       params: {
         start_date: params?.start_date,
         end_date: params?.end_date
@@ -354,7 +391,7 @@ class ExerciseTemplatesClient extends BaseHevyClient {
   async getById(exerciseTemplateId) {
     return this.request({
       method: "GET",
-      url: `/v1/exercise_templates/${exerciseTemplateId}`
+      url: `/v1/exercise_templates/${encodePathSegment(exerciseTemplateId)}`
     });
   }
   async create(exercise) {
@@ -381,7 +418,7 @@ class RoutineFoldersClient extends BaseHevyClient {
   async getById(folderId) {
     return this.request({
       method: "GET",
-      url: `/v1/routine_folders/${folderId}`
+      url: `/v1/routine_folders/${encodePathSegment(folderId)}`
     });
   }
   async create(folder) {
@@ -408,7 +445,7 @@ class RoutinesClient extends BaseHevyClient {
   async getById(routineId) {
     return this.request({
       method: "GET",
-      url: `/v1/routines/${routineId}`
+      url: `/v1/routines/${encodePathSegment(routineId)}`
     });
   }
   async create(routine) {
@@ -421,8 +458,18 @@ class RoutinesClient extends BaseHevyClient {
   async update(routineId, routine) {
     return this.request({
       method: "PUT",
-      url: `/v1/routines/${routineId}`,
+      url: `/v1/routines/${encodePathSegment(routineId)}`,
       data: routine
+    });
+  }
+}
+
+// src/resources/user.ts
+class UserClient extends BaseHevyClient {
+  async getInfo() {
+    return this.request({
+      method: "GET",
+      url: "/v1/user/info"
     });
   }
 }
@@ -442,7 +489,7 @@ class WorkoutsClient extends BaseHevyClient {
   async getById(workoutId) {
     return this.request({
       method: "GET",
-      url: `/v1/workouts/${workoutId}`
+      url: `/v1/workouts/${encodePathSegment(workoutId)}`
     });
   }
   async count() {
@@ -472,7 +519,7 @@ class WorkoutsClient extends BaseHevyClient {
   async update(workoutId, workout) {
     return this.request({
       method: "PUT",
-      url: `/v1/workouts/${workoutId}`,
+      url: `/v1/workouts/${encodePathSegment(workoutId)}`,
       data: workout
     });
   }
@@ -485,6 +532,8 @@ class Hevy extends BaseHevyClient {
   exerciseTemplates;
   routineFolders;
   exerciseHistory;
+  user;
+  bodyMeasurements;
   constructor(config) {
     super(config);
     this.workouts = new WorkoutsClient(config);
@@ -492,8 +541,10 @@ class Hevy extends BaseHevyClient {
     this.exerciseTemplates = new ExerciseTemplatesClient(config);
     this.routineFolders = new RoutineFoldersClient(config);
     this.exerciseHistory = new ExerciseHistoryClient(config);
+    this.user = new UserClient(config);
+    this.bodyMeasurements = new BodyMeasurementsClient(config);
   }
 }
 var src_default = Hevy;
 
-//# debugId=ED341ECD31F257ED64756E2164756E21
+//# debugId=37A684F283283BAB64756E2164756E21

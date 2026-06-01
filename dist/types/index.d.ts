@@ -1,4 +1,5 @@
 export type SetType = 'warmup' | 'normal' | 'failure' | 'dropset';
+export type RpeValue = 6 | 7 | 7.5 | 8 | 8.5 | 9 | 9.5 | 10;
 export interface Set {
     index: number;
     type: SetType;
@@ -16,7 +17,7 @@ export interface PostWorkoutsRequestSet {
     distance_meters: number | null;
     duration_seconds: number | null;
     custom_metric: number | null;
-    rpe?: 6 | 7 | 7.5 | 8 | 8.5 | 9 | 9.5 | 10;
+    rpe?: RpeValue | null;
 }
 export interface RepRange {
     start: number | null;
@@ -217,6 +218,42 @@ export interface PaginatedRoutineFolders {
     page: number;
     page_count: number;
     routine_folders: RoutineFolder[];
+}
+export interface UserInfo {
+    id?: string;
+    name?: string;
+    url?: string;
+}
+export interface UserInfoResponse {
+    data?: UserInfo;
+}
+export interface BodyMeasurementValues {
+    weight_kg?: number | null;
+    lean_mass_kg?: number | null;
+    fat_percent?: number | null;
+    neck_cm?: number | null;
+    shoulder_cm?: number | null;
+    chest_cm?: number | null;
+    left_bicep_cm?: number | null;
+    right_bicep_cm?: number | null;
+    left_forearm_cm?: number | null;
+    right_forearm_cm?: number | null;
+    abdomen?: number | null;
+    waist?: number | null;
+    hips?: number | null;
+    left_thigh?: number | null;
+    right_thigh?: number | null;
+    left_calf?: number | null;
+    right_calf?: number | null;
+}
+export interface BodyMeasurement extends BodyMeasurementValues {
+    date: string;
+}
+export type PutBodyMeasurement = BodyMeasurementValues;
+export interface PaginatedBodyMeasurements {
+    page: number;
+    page_count: number;
+    body_measurements: BodyMeasurement[];
 }
 export interface PaginationParams {
     page?: number;

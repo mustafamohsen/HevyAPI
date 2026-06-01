@@ -5,6 +5,7 @@ import type {
   PostRoutineFolderRequestBody,
   RoutineFolder,
 } from '../types';
+import { encodePathSegment } from '../utils/path';
 
 export class RoutineFoldersClient extends BaseHevyClient {
   async getAll(params?: PaginationParams): Promise<PaginatedRoutineFolders> {
@@ -18,10 +19,10 @@ export class RoutineFoldersClient extends BaseHevyClient {
     });
   }
 
-  async getById(folderId: string): Promise<RoutineFolder> {
+  async getById(folderId: string | number): Promise<RoutineFolder> {
     return this.request<RoutineFolder>({
       method: 'GET',
-      url: `/v1/routine_folders/${folderId}`,
+      url: `/v1/routine_folders/${encodePathSegment(folderId)}`,
     });
   }
 

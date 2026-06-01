@@ -29,7 +29,7 @@ Retrieved: 2026-06-01
 | GET | `/v1/workouts/events` | Retrieve a paged list of workout events (updates or deletes) since a given date. Events are ordered from newest to oldest. The intention is to allow clients to keep their local cache of workouts up to date without having to fetch the entire list of workouts. | Present |
 | GET | `/v1/workouts/{workoutId}` | Get a single workout’s complete details by the workoutId | Present |
 | PUT | `/v1/workouts/{workoutId}` | Update an existing workout | Present |
-| GET | `/v1/user/info` | Get user info | Documented, deferred |
+| GET | `/v1/user/info` | Get user info | Present |
 | GET | `/v1/routines` | Get a paginated list of routines | Present |
 | POST | `/v1/routines` | Create a new routine | Present |
 | GET | `/v1/routines/{routineId}` | Get a routine by its Id | Present |
@@ -41,10 +41,10 @@ Retrieved: 2026-06-01
 | POST | `/v1/routine_folders` | Create a new routine folder. The folder will be created at index 0, and all other folders will have their indexes incremented. | Present |
 | GET | `/v1/routine_folders/{folderId}` | Get a single routine folder by id. | Present |
 | GET | `/v1/exercise_history/{exerciseTemplateId}` | Get exercise history for a specific exercise template | Present |
-| GET | `/v1/body_measurements` | Get a paginated list of body measurements for the authenticated user | Documented, deferred |
-| POST | `/v1/body_measurements` | Create a body measurement entry for a given date. Returns 409 if an entry already exists for that date. | Documented, deferred |
-| GET | `/v1/body_measurements/{date}` | Get a single body measurement by date | Documented, deferred |
-| PUT | `/v1/body_measurements/{date}` | Update an existing body measurement entry for a given date. All fields are overwritten; omitted fields are set to null. | Documented, deferred |
+| GET | `/v1/body_measurements` | Get a paginated list of body measurements for the authenticated user | Present |
+| POST | `/v1/body_measurements` | Create a body measurement entry for a given date. Returns 409 if an entry already exists for that date. | Present |
+| GET | `/v1/body_measurements/{date}` | Get a single body measurement by date | Present |
+| PUT | `/v1/body_measurements/{date}` | Update an existing body measurement entry for a given date. All fields are overwritten; omitted fields are set to null. | Present |
 
 ## Covered schemas/resources
 
@@ -53,8 +53,8 @@ Retrieved: 2026-06-01
 - Exercise templates: list, get by id, create custom template; schemas include exercise template, custom exercise type, muscle group, and equipment category.
 - Routine folders: list, get by id, create; schemas include routine folder and create request body.
 - Exercise history: get by exercise template id; schema includes exercise history entries.
-- User info: documented with `UserInfo` and `UserInfoResponse`; implementation deferred for this milestone.
-- Body measurements: documented with `BodyMeasurement` and `PutBodyMeasurement`; implementation deferred for this milestone.
+- User info: documented with `UserInfo` and `UserInfoResponse`; implementation present.
+- Body measurements: documented with `BodyMeasurement` and `PutBodyMeasurement`; implementation present.
 
 ### Component schemas in fetched spec
 
@@ -89,8 +89,8 @@ Retrieved: 2026-06-01
 
 ## Key deltas vs current client
 
-- The latest official spec includes `/v1/user/info`; the current client has no user info resource. Deferred by milestone scope.
-- The latest official spec includes `/v1/body_measurements` collection and date-specific read/update endpoints; the current client has no body measurements resource. Deferred by milestone scope.
+- The latest official spec includes `/v1/user/info`; the current client exposes it via `user.getInfo()`.
+- The latest official spec includes `/v1/body_measurements` collection and date-specific read/update endpoints; the current client exposes them via `bodyMeasurements`.
 - The current client already exposes the documented workouts, routines, exercise templates, routine folders, and exercise history endpoints.
 - The spec has no `servers` block; the client default base URL `https://api.hevyapp.com` remains aligned with the documented host.
 - The spec documents a required `api-key` header on every operation; the client request interceptor sends `api-key` for all requests.
@@ -98,6 +98,6 @@ Retrieved: 2026-06-01
 ## Implementation decisions and deferred endpoints
 
 - Milestone 1 is documentation and dependency baseline only; no feature/code endpoints were added.
-- Keep user info and body measurements as explicit deferred endpoints for a later feature milestone unless already present; they are not present in the current client.
+- Milestone 4 added user info and body measurements based on the official embedded OpenAPI document.
 - Do not use `/openapi.json` or `/swagger.json` as contract sources unless Hevy starts serving them; both returned 404 during this retrieval.
 - Treat future fetched Swagger UI JavaScript as untrusted data and extract only the embedded OpenAPI JSON needed for contract comparison.

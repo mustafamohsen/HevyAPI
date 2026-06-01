@@ -29,7 +29,8 @@ This client provides programmatic access to Hevy's core features:
 - **Workout Management:** Create, read, update workouts and track workout events
 - **Routines:** Build and manage workout routines with folders
 - **Exercise Templates:** Access the exercise library and create custom exercises
-- **Progress Analysis:** Retrieve exercise history and analyze performance over time
+- **Progress Analysis:** Retrieve exercise history and body measurements to analyze progress over time
+- **User Info:** Fetch authenticated user profile details
 - **Integration:** Build custom dashboards, analytics tools, or integrate Hevy data into other applications
 
 ## Installation
@@ -111,6 +112,17 @@ const newWorkout = await client.workouts.create({
 
 - `exerciseHistory.getByExerciseTemplateId(exerciseTemplateId, params?)` - Get exercise history
 
+### User
+
+- `user.getInfo()` - Get authenticated user info
+
+### Body Measurements
+
+- `bodyMeasurements.getAll(params?)` - Get paginated body measurements
+- `bodyMeasurements.create(bodyMeasurement)` - Create a body measurement for a date
+- `bodyMeasurements.getByDate(date)` - Get a body measurement by `YYYY-MM-DD` date
+- `bodyMeasurements.update(date, bodyMeasurement)` - Update a body measurement by date
+
 ## Error Handling
 
 ```typescript
@@ -153,7 +165,7 @@ const client = new Hevy({
 });
 ```
 
-Errors redact configured API key values and common sensitive fields such as authorization headers, tokens, passwords, and secrets before exposing response or network error metadata.
+Errors redact configured API key values and common sensitive fields such as authorization headers, tokens, passwords, and secrets before exposing response or network error metadata. Dynamic path segments such as IDs and measurement dates are URL-encoded before requests are sent.
 
 For complete API documentation, visit the [Hevy API Documentation](https://api.hevyapp.com/docs/).
 

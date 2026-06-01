@@ -38,6 +38,9 @@ const getRequestInterceptor = (client: TestClient) =>
   (client as unknown as { client: ReturnType<typeof createClientMock> }).client.interceptors.request.use
     .mock.calls[0][0];
 
+const getClientMock = (client: unknown) =>
+  (client as { client: ReturnType<typeof createClientMock> }).client;
+
 describe('Hevy Client', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -372,6 +375,88 @@ describe('Hevy Client', () => {
       const client = new Hevy({ apiKey: 'test-key' });
       expect(client.exerciseHistory).toBeDefined();
       expect(client.exerciseHistory.getByExerciseTemplateId).toBeInstanceOf(Function);
+    });
+
+    it('should have user client', () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      expect(client.user).toBeDefined();
+      expect(client.user.getInfo).toBeInstanceOf(Function);
+    });
+
+    it('should have bodyMeasurements client', () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      expect(client.bodyMeasurements).toBeDefined();
+      expect(client.bodyMeasurements.getAll).toBeInstanceOf(Function);
+    });
+  });
+
+  describe('Resource Requests', () => {
+    it('encodes dynamic path segments for existing resources', async () => {
+      const dangerousId = 'id /?#%💪';
+      const encodedId = 'id%20%2F%3F%23%25%F0%9F%92%AA';
+      const client = new Hevy({ apiKey: 'test-key' });
+      const resources = [
+        { resource: client.workouts, call: () => client.workouts.getById(dangerousId), url: `/v1/workouts/${encodedId}` },
+        { resource: client.workouts, call: () => client.workouts.update(dangerousId, { workout: { title: 'Workout', start_time: '2024-01-01T00:00:00Z', end_time: '2024-01-01T01:00:00Z', exercises: [] } }), url: `/v1/workouts/${encodedId}` },
+        { resource: client.routines, call: () => client.routines.getById(dangerousId), url: `/v1/routines/${encodedId}` },
+        { resource: client.routines, call: () => client.routines.update(dangerousId, { routine: { title: 'Routine', exercises: [] } }), url: `/v1/routines/${encodedId}` },
+        { resource: client.exerciseTemplates, call: () => client.exerciseTemplates.getById(dangerousId), url: `/v1/exercise_templates/${encodedId}` },
+        { resource: client.routineFolders, call: () => client.routineFolders.getById(dangerousId), url: `/v1/routine_folders/${encodedId}` },
+        { resource: client.exerciseHistory, call: () => client.exerciseHistory.getByExerciseTemplateId(dangerousId), url: `/v1/exercise_history/${encodedId}` },
+      ];
+
+      for (const { resource, call, url } of resources) {
+        const resourceMock = getClientMock(resource);
+        resourceMock.request.mockResolvedValueOnce({ data: {} });
+
+        await call();
+
+        expect(resourceMock.request).toHaveBeenLastCalledWith(expect.objectContaining({ url }));
+      }
+    });
+
+    it('requests user info with the official response wrapper', async () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      const userMock = getClientMock(client.user);
+      const response = { data: { id: 'user-id', name: 'Jane', url: 'https://hevy.com/user/jane' } };
+      userMock.request.mockResolvedValueOnce({ data: response });
+
+      await expect(client.user.getInfo()).resolves.toEqual(response);
+
+      expect(userMock.request).toHaveBeenCalledWith({ method: 'GET', url: '/v1/user/info' });
+    });
+
+    it('requests body measurements with official paths, params, and bodies', async () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      const bodyMeasurementsMock = getClientMock(client.bodyMeasurements);
+      const measurement = { date: '2024-08-14', weight_kg: 80.5, abdomen: null };
+      const update = { weight_kg: 81, fat_percent: null };
+      bodyMeasurementsMock.request.mockResolvedValue({ data: undefined });
+
+      await client.bodyMeasurements.getAll();
+      await client.bodyMeasurements.create(measurement);
+      await client.bodyMeasurements.getByDate('2024/08/14?#%💪');
+      await client.bodyMeasurements.update('2024/08/14?#%💪', update);
+
+      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(1, {
+        method: 'GET',
+        url: '/v1/body_measurements',
+        params: { page: 1, pageSize: 10 },
+      });
+      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(2, {
+        method: 'POST',
+        url: '/v1/body_measurements',
+        data: measurement,
+      });
+      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(3, {
+        method: 'GET',
+        url: '/v1/body_measurements/2024%2F08%2F14%3F%23%25%F0%9F%92%AA',
+      });
+      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(4, {
+        method: 'PUT',
+        url: '/v1/body_measurements/2024%2F08%2F14%3F%23%25%F0%9F%92%AA',
+        data: update,
+      });
     });
   });
 });

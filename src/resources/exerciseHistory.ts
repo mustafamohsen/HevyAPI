@@ -1,5 +1,6 @@
 import { BaseHevyClient } from '../client';
 import type { ExerciseHistoryResponse } from '../types';
+import { encodePathSegment } from '../utils/path';
 
 export class ExerciseHistoryClient extends BaseHevyClient {
   async getByExerciseTemplateId(
@@ -8,7 +9,7 @@ export class ExerciseHistoryClient extends BaseHevyClient {
   ): Promise<ExerciseHistoryResponse> {
     return this.request<ExerciseHistoryResponse>({
       method: 'GET',
-      url: `/v1/exercise_history/${exerciseTemplateId}`,
+      url: `/v1/exercise_history/${encodePathSegment(exerciseTemplateId)}`,
       params: {
         start_date: params?.start_date,
         end_date: params?.end_date,

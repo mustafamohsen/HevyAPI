@@ -7,6 +7,7 @@ import type {
   Workout,
   WorkoutSummary,
 } from '../types';
+import { encodePathSegment } from '../utils/path';
 
 export class WorkoutsClient extends BaseHevyClient {
   async getAll(params?: PaginationParams): Promise<PaginatedWorkouts> {
@@ -23,7 +24,7 @@ export class WorkoutsClient extends BaseHevyClient {
   async getById(workoutId: string): Promise<Workout> {
     return this.request<Workout>({
       method: 'GET',
-      url: `/v1/workouts/${workoutId}`,
+      url: `/v1/workouts/${encodePathSegment(workoutId)}`,
     });
   }
 
@@ -57,7 +58,7 @@ export class WorkoutsClient extends BaseHevyClient {
   async update(workoutId: string, workout: PostWorkoutsRequestBody): Promise<Workout> {
     return this.request<Workout>({
       method: 'PUT',
-      url: `/v1/workouts/${workoutId}`,
+      url: `/v1/workouts/${encodePathSegment(workoutId)}`,
       data: workout,
     });
   }

@@ -3,10 +3,12 @@ import { BaseHevyClient } from './client';
 
 export type { HevyClientConfig } from './client';
 
+import { BodyMeasurementsClient } from './resources/bodyMeasurements';
 import { ExerciseHistoryClient } from './resources/exerciseHistory';
 import { ExerciseTemplatesClient } from './resources/exerciseTemplates';
 import { RoutineFoldersClient } from './resources/routineFolders';
 import { RoutinesClient } from './resources/routines';
+import { UserClient } from './resources/user';
 import { WorkoutsClient } from './resources/workouts';
 
 export class Hevy extends BaseHevyClient {
@@ -15,6 +17,8 @@ export class Hevy extends BaseHevyClient {
   public exerciseTemplates: ExerciseTemplatesClient;
   public routineFolders: RoutineFoldersClient;
   public exerciseHistory: ExerciseHistoryClient;
+  public user: UserClient;
+  public bodyMeasurements: BodyMeasurementsClient;
 
   constructor(config: HevyClientConfig) {
     super(config);
@@ -23,6 +27,8 @@ export class Hevy extends BaseHevyClient {
     this.exerciseTemplates = new ExerciseTemplatesClient(config);
     this.routineFolders = new RoutineFoldersClient(config);
     this.exerciseHistory = new ExerciseHistoryClient(config);
+    this.user = new UserClient(config);
+    this.bodyMeasurements = new BodyMeasurementsClient(config);
   }
 }
 
