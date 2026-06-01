@@ -1,8 +1,10 @@
 import axios from 'axios';
+import type { RequestOptions } from '../src/client';
 import { BaseHevyClient } from '../src/client';
 import {
   AuthenticationError,
   ConfigurationError,
+  ForbiddenError,
   Hevy,
   HevyAPIError,
   NetworkError,
@@ -10,6 +12,7 @@ import {
   RateLimitError,
   ValidationError,
 } from '../src/index';
+import { redactSensitiveData, sanitizeError } from '../src/utils/redaction';
 
 const createClientMock = () => ({
   interceptors: {
@@ -28,7 +31,15 @@ vi.mock('axios', () => ({
   create: mockAxios.create,
 }));
 
-class TestClient extends BaseHevyClient {}
+class TestClient extends BaseHevyClient {
+  performRequest<T>(options: RequestOptions): Promise<T> {
+    return this.request<T>(options);
+  }
+}
+
+const getResponseSuccessInterceptor = (client: TestClient) =>
+  (client as unknown as { client: ReturnType<typeof createClientMock> }).client.interceptors.response.use
+    .mock.calls[0][0];
 
 const getResponseErrorInterceptor = (client: TestClient) =>
   (client as unknown as { client: ReturnType<typeof createClientMock> }).client.interceptors.response.use
@@ -37,6 +48,10 @@ const getResponseErrorInterceptor = (client: TestClient) =>
 const getRequestInterceptor = (client: TestClient) =>
   (client as unknown as { client: ReturnType<typeof createClientMock> }).client.interceptors.request.use
     .mock.calls[0][0];
+
+const getRequestErrorInterceptor = (client: TestClient) =>
+  (client as unknown as { client: ReturnType<typeof createClientMock> }).client.interceptors.request.use
+    .mock.calls[0][1];
 
 const getClientMock = (client: unknown) =>
   (client as { client: ReturnType<typeof createClientMock> }).client;
@@ -300,6 +315,59 @@ describe('Hevy Client', () => {
 
       expect(mockHeaders.set).toHaveBeenCalledWith('api-key', 'my-api-key');
     });
+
+    it('wraps request interceptor failures as network errors', async () => {
+      const client = new TestClient({ apiKey: 'my-api-key' });
+      const interceptor = getRequestErrorInterceptor(client);
+
+      await expect(interceptor('failed-secret')).rejects.toThrow(NetworkError);
+    });
+  });
+
+  describe('Request Execution', () => {
+    it('passes successful responses through the response interceptor', () => {
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseSuccessInterceptor(client);
+      const response = { data: { ok: true } };
+
+      expect(interceptor(response)).toBe(response);
+    });
+
+    it('returns response data on successful requests', async () => {
+      const client = new TestClient({ apiKey: 'test-key' });
+      const testClientMock = getClientMock(client);
+      const responseData = { ok: true };
+      testClientMock.request.mockResolvedValueOnce({ data: responseData });
+
+      await expect(client.performRequest({ method: 'GET', url: '/v1/test' })).resolves.toBe(
+        responseData,
+      );
+    });
+
+    it('rethrows known Hevy API errors without wrapping them', async () => {
+      const client = new TestClient({ apiKey: 'test-key' });
+      const testClientMock = getClientMock(client);
+      const knownError = new HevyAPIError('Known', 500);
+      testClientMock.request.mockRejectedValueOnce(knownError);
+
+      await expect(client.performRequest({ method: 'GET', url: '/v1/test' })).rejects.toBe(
+        knownError,
+      );
+    });
+
+    it('wraps unknown request failures in network errors', async () => {
+      const client = new TestClient({ apiKey: 'secret-key' });
+      const testClientMock = getClientMock(client);
+      testClientMock.request.mockRejectedValueOnce({ message: 'contains secret-key' });
+
+      try {
+        await client.performRequest({ method: 'GET', url: '/v1/test' });
+      } catch (error) {
+        expect(error).toBeInstanceOf(NetworkError);
+        expect((error as NetworkError).message).toBe('Unknown error occurred');
+        expect(JSON.stringify(error)).not.toContain('secret-key');
+      }
+    });
   });
 
   describe('Base URL Trust', () => {
@@ -465,6 +533,7 @@ describe('Hevy Client', () => {
       bodyMeasurementsMock.request.mockResolvedValue({ data: undefined });
 
       await client.bodyMeasurements.getAll();
+      await client.bodyMeasurements.getAll({ page: 3, pageSize: 25 });
       await client.bodyMeasurements.create(measurement);
       await client.bodyMeasurements.getByDate('2024/08/14?#%💪');
       await client.bodyMeasurements.update('2024/08/14?#%💪', update);
@@ -475,18 +544,210 @@ describe('Hevy Client', () => {
         params: { page: 1, pageSize: 10 },
       });
       expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(2, {
+        method: 'GET',
+        url: '/v1/body_measurements',
+        params: { page: 3, pageSize: 25 },
+      });
+      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(3, {
         method: 'POST',
         url: '/v1/body_measurements',
         data: measurement,
       });
-      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(3, {
+      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(4, {
         method: 'GET',
         url: '/v1/body_measurements/2024%2F08%2F14%3F%23%25%F0%9F%92%AA',
       });
-      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(4, {
+      expect(bodyMeasurementsMock.request).toHaveBeenNthCalledWith(5, {
         method: 'PUT',
         url: '/v1/body_measurements/2024%2F08%2F14%3F%23%25%F0%9F%92%AA',
         data: update,
+      });
+    });
+
+    it('requests workouts with default and custom params, paths, and bodies', async () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      const workoutsMock = getClientMock(client.workouts);
+      const workout = {
+        workout: {
+          title: 'Workout',
+          start_time: '2024-01-01T00:00:00Z',
+          end_time: '2024-01-01T01:00:00Z',
+          exercises: [],
+        },
+      };
+      workoutsMock.request.mockResolvedValue({ data: {} });
+
+      await client.workouts.getAll();
+      await client.workouts.getAll({ page: 2, pageSize: 20 });
+      await client.workouts.getById('workout-1');
+      await client.workouts.count();
+      await client.workouts.getEvents({});
+      await client.workouts.getEvents({ page: 4, pageSize: 40, since: '2024-01-01T00:00:00Z' });
+      await client.workouts.create(workout);
+      await client.workouts.update('workout-1', workout);
+
+      expect(workoutsMock.request).toHaveBeenNthCalledWith(1, {
+        method: 'GET',
+        url: '/v1/workouts',
+        params: { page: 1, pageSize: 5 },
+      });
+      expect(workoutsMock.request).toHaveBeenNthCalledWith(2, {
+        method: 'GET',
+        url: '/v1/workouts',
+        params: { page: 2, pageSize: 20 },
+      });
+      expect(workoutsMock.request).toHaveBeenNthCalledWith(3, {
+        method: 'GET',
+        url: '/v1/workouts/workout-1',
+      });
+      expect(workoutsMock.request).toHaveBeenNthCalledWith(4, {
+        method: 'GET',
+        url: '/v1/workouts/count',
+      });
+      expect(workoutsMock.request).toHaveBeenNthCalledWith(5, {
+        method: 'GET',
+        url: '/v1/workouts/events',
+        params: { page: 1, pageSize: 5, since: undefined },
+      });
+      expect(workoutsMock.request).toHaveBeenNthCalledWith(6, {
+        method: 'GET',
+        url: '/v1/workouts/events',
+        params: { page: 4, pageSize: 40, since: '2024-01-01T00:00:00Z' },
+      });
+      expect(workoutsMock.request).toHaveBeenNthCalledWith(7, {
+        method: 'POST',
+        url: '/v1/workouts',
+        data: workout,
+      });
+      expect(workoutsMock.request).toHaveBeenNthCalledWith(8, {
+        method: 'PUT',
+        url: '/v1/workouts/workout-1',
+        data: workout,
+      });
+    });
+
+    it('requests routines with default and custom params, paths, and bodies', async () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      const routinesMock = getClientMock(client.routines);
+      const routine = { routine: { title: 'Routine', exercises: [] } };
+      routinesMock.request.mockResolvedValue({ data: {} });
+
+      await client.routines.getAll();
+      await client.routines.getAll({ page: 2, pageSize: 15 });
+      await client.routines.getById('routine-1');
+      await client.routines.create(routine);
+      await client.routines.update('routine-1', routine);
+
+      expect(routinesMock.request).toHaveBeenNthCalledWith(1, {
+        method: 'GET',
+        url: '/v1/routines',
+        params: { page: 1, pageSize: 5 },
+      });
+      expect(routinesMock.request).toHaveBeenNthCalledWith(2, {
+        method: 'GET',
+        url: '/v1/routines',
+        params: { page: 2, pageSize: 15 },
+      });
+      expect(routinesMock.request).toHaveBeenNthCalledWith(3, {
+        method: 'GET',
+        url: '/v1/routines/routine-1',
+      });
+      expect(routinesMock.request).toHaveBeenNthCalledWith(4, {
+        method: 'POST',
+        url: '/v1/routines',
+        data: routine,
+      });
+      expect(routinesMock.request).toHaveBeenNthCalledWith(5, {
+        method: 'PUT',
+        url: '/v1/routines/routine-1',
+        data: routine,
+      });
+    });
+
+    it('requests exercise templates with default and custom params, paths, and bodies', async () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      const exerciseTemplatesMock = getClientMock(client.exerciseTemplates);
+      const exercise = { title: 'Custom curl', type: 'weight_reps' };
+      exerciseTemplatesMock.request.mockResolvedValue({ data: {} });
+
+      await client.exerciseTemplates.getAll();
+      await client.exerciseTemplates.getAll({ page: 5, pageSize: 50 });
+      await client.exerciseTemplates.getById('exercise-1');
+      await client.exerciseTemplates.create(exercise);
+
+      expect(exerciseTemplatesMock.request).toHaveBeenNthCalledWith(1, {
+        method: 'GET',
+        url: '/v1/exercise_templates',
+        params: { page: 1, pageSize: 5 },
+      });
+      expect(exerciseTemplatesMock.request).toHaveBeenNthCalledWith(2, {
+        method: 'GET',
+        url: '/v1/exercise_templates',
+        params: { page: 5, pageSize: 50 },
+      });
+      expect(exerciseTemplatesMock.request).toHaveBeenNthCalledWith(3, {
+        method: 'GET',
+        url: '/v1/exercise_templates/exercise-1',
+      });
+      expect(exerciseTemplatesMock.request).toHaveBeenNthCalledWith(4, {
+        method: 'POST',
+        url: '/v1/exercise_templates',
+        data: exercise,
+      });
+    });
+
+    it('requests routine folders with default and custom params, paths, and bodies', async () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      const routineFoldersMock = getClientMock(client.routineFolders);
+      const folder = { title: 'Folder' };
+      routineFoldersMock.request.mockResolvedValue({ data: {} });
+
+      await client.routineFolders.getAll();
+      await client.routineFolders.getAll({ page: 6, pageSize: 60 });
+      await client.routineFolders.getById(123);
+      await client.routineFolders.create(folder);
+
+      expect(routineFoldersMock.request).toHaveBeenNthCalledWith(1, {
+        method: 'GET',
+        url: '/v1/routine_folders',
+        params: { page: 1, pageSize: 5 },
+      });
+      expect(routineFoldersMock.request).toHaveBeenNthCalledWith(2, {
+        method: 'GET',
+        url: '/v1/routine_folders',
+        params: { page: 6, pageSize: 60 },
+      });
+      expect(routineFoldersMock.request).toHaveBeenNthCalledWith(3, {
+        method: 'GET',
+        url: '/v1/routine_folders/123',
+      });
+      expect(routineFoldersMock.request).toHaveBeenNthCalledWith(4, {
+        method: 'POST',
+        url: '/v1/routine_folders',
+        data: folder,
+      });
+    });
+
+    it('requests exercise history with and without date params', async () => {
+      const client = new Hevy({ apiKey: 'test-key' });
+      const exerciseHistoryMock = getClientMock(client.exerciseHistory);
+      exerciseHistoryMock.request.mockResolvedValue({ data: {} });
+
+      await client.exerciseHistory.getByExerciseTemplateId('template-1');
+      await client.exerciseHistory.getByExerciseTemplateId('template-1', {
+        start_date: '2024-01-01',
+        end_date: '2024-02-01',
+      });
+
+      expect(exerciseHistoryMock.request).toHaveBeenNthCalledWith(1, {
+        method: 'GET',
+        url: '/v1/exercise_history/template-1',
+        params: { start_date: undefined, end_date: undefined },
+      });
+      expect(exerciseHistoryMock.request).toHaveBeenNthCalledWith(2, {
+        method: 'GET',
+        url: '/v1/exercise_history/template-1',
+        params: { start_date: '2024-01-01', end_date: '2024-02-01' },
       });
     });
   });
@@ -501,6 +762,18 @@ describe('Error Classes', () => {
       expect(error.statusCode).toBe(400);
       expect(error.response).toEqual({ field: 'error' });
       expect(error instanceof Error).toBe(true);
+    });
+
+    it('serializes API errors to JSON', () => {
+      const response = { field: 'error' };
+      const error = new HevyAPIError('Test error', 400, response);
+
+      expect(error.toJSON()).toEqual({
+        name: 'HevyAPIError',
+        message: 'Test error',
+        statusCode: 400,
+        response,
+      });
     });
   });
 
@@ -562,11 +835,29 @@ describe('Error Classes', () => {
     });
   });
 
+  describe('ForbiddenError', () => {
+    it('should have default message', () => {
+      const error = new ForbiddenError();
+      expect(error.name).toBe('ForbiddenError');
+      expect(error.statusCode).toBe(403);
+      expect(error.message).toBe('Access forbidden');
+    });
+  });
+
   describe('ConfigurationError', () => {
     it('should have a configuration error name and message', () => {
       const error = new ConfigurationError('Invalid config');
       expect(error.name).toBe('ConfigurationError');
       expect(error.message).toBe('Invalid config');
+    });
+
+    it('serializes configuration errors to JSON', () => {
+      const error = new ConfigurationError('Invalid config');
+
+      expect(error.toJSON()).toEqual({
+        name: 'ConfigurationError',
+        message: 'Invalid config',
+      });
     });
   });
 
@@ -582,6 +873,74 @@ describe('Error Classes', () => {
     it('should have undefined original error when not provided', () => {
       const error = new NetworkError('Network failed');
       expect(error.originalError).toBeUndefined();
+    });
+
+    it('serializes network errors to JSON', () => {
+      const originalError = new Error('Connection refused');
+      const error = new NetworkError('Network failed', originalError);
+
+      expect(error.toJSON()).toEqual({
+        name: 'NetworkError',
+        message: 'Network failed',
+        originalError,
+      });
+    });
+  });
+});
+
+describe('Redaction Utilities', () => {
+  it('leaves null, undefined, numbers, and booleans unchanged', () => {
+    expect(redactSensitiveData(null)).toBeNull();
+    expect(redactSensitiveData(undefined)).toBeUndefined();
+    expect(redactSensitiveData(42)).toBe(42);
+    expect(redactSensitiveData(false)).toBe(false);
+  });
+
+  it('redacts exact secrets in strings and converts non-object primitives', () => {
+    expect(redactSensitiveData('token=secret', { secrets: ['secret'] })).toBe('token=[REDACTED]');
+    expect(redactSensitiveData(Symbol.for('sensitive'))).toBe('Symbol(sensitive)');
+  });
+
+  it('redacts arrays, sensitive key variants, circular references, and deep objects', () => {
+    const circular: Record<string, unknown> = { safe: 'value' };
+    circular.self = circular;
+    const deep = { level1: { level2: { level3: { level4: { level5: { level6: { level7: { level8: { level9: 'hidden' } } } } } } } } };
+
+    expect(
+      redactSensitiveData([
+        { Authorization: 'Bearer token', nested: { password: 'pass' } },
+        circular,
+        deep,
+      ]),
+    ).toEqual([
+      { Authorization: '[REDACTED]', nested: { password: '[REDACTED]' } },
+      { safe: 'value', self: '[Circular]' },
+      { level1: { level2: { level3: { level4: { level5: { level6: { level7: '[REDACTED_OBJECT]' } } } } } } },
+    ]);
+  });
+
+  it('sanitizes errors with redacted messages, stacks, causes, and sensitive properties', () => {
+    const cause = new Error('caused by secret');
+    const error = Object.assign(new Error('failed with secret'), {
+      cause,
+      token: 'secret',
+      details: { note: 'contains secret', access_token: 'secret' },
+    });
+    error.stack = 'Error: failed with secret\n at secret';
+
+    const sanitized = sanitizeError(error, { secrets: ['secret'] }) as Error & {
+      cause?: Error;
+      token?: string;
+      details?: Record<string, unknown>;
+    };
+
+    expect(sanitized.message).toBe('failed with [REDACTED]');
+    expect(sanitized.stack).not.toContain('secret');
+    expect(sanitized.token).toBe('[REDACTED]');
+    expect(sanitized.cause?.message).toBe('caused by [REDACTED]');
+    expect(sanitized.details).toEqual({
+      note: 'contains [REDACTED]',
+      access_token: '[REDACTED]',
     });
   });
 });

@@ -24,6 +24,7 @@
     "prepack": "bun run build",
     "test": "bun test",
     "test:coverage": "bun test --coverage",
+    "coverage:verify": "bun run scripts/verify-coverage.ts",
     "format": "biome format --write .",
     "lint": "biome check .",
     "format:ci": "biome format .",
@@ -32,7 +33,7 @@
     "smoke:esm": "node --input-type=module -e \"import Hevy, { Hevy as Named } from 'hevy-api'; if (typeof Hevy !== 'function' || Named !== Hevy) throw new Error('ESM package exports mismatch');\"",
     "pack:dry-run": "bun pm pack --dry-run",
     "llms:generate": "bun run scripts/generate-llms.ts",
-    "verify:ci": "bun run build && bun run smoke:cjs && bun run smoke:esm && bun run lint && bun test && bun run typecheck && bun install --frozen-lockfile --dry-run && bun audit --production && bun run pack:dry-run"
+    "verify:ci": "bun run build && bun run smoke:cjs && bun run smoke:esm && bun run lint && bun run coverage:verify && bun run typecheck && bun install --frozen-lockfile --dry-run && bun audit --production && bun run pack:dry-run"
   },
   "keywords": [
     "hevy",
