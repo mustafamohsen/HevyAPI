@@ -1,3 +1,6 @@
+# Local orchestration artifacts
+handoff/
+
 # Logs
 logs
 *.log
