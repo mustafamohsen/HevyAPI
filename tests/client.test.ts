@@ -379,6 +379,12 @@ describe('Hevy Client', () => {
       );
     });
 
+    it('preserves an explicit zero timeout', () => {
+      new TestClient({ apiKey: 'test-key', timeout: 0 });
+
+      expect(axios.create).toHaveBeenCalledWith(expect.objectContaining({ timeout: 0 }));
+    });
+
     it('allows official-origin base URLs without explicit trust', () => {
       new TestClient({ apiKey: 'test-key', baseURL: 'https://api.hevyapp.com/v1' });
 

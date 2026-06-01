@@ -226,7 +226,7 @@ class BaseHevyClient {
     const baseURL = this.resolveBaseURL(config);
     this.client = import_axios.default.create({
       baseURL,
-      timeout: config.timeout || 30000,
+      timeout: config.timeout ?? 30000,
       maxRedirects: 0,
       headers: {
         "Content-Type": "application/json"
@@ -577,4 +577,4 @@ class Hevy extends BaseHevyClient {
 }
 var src_default = Hevy;
 
-//# debugId=040327089BF537F064756E2164756E21
+//# debugId=DA6890B01208328A64756E2164756E21

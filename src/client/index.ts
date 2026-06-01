@@ -38,7 +38,7 @@ export abstract class BaseHevyClient {
     const baseURL = this.resolveBaseURL(config);
     this.client = axios.create({
       baseURL,
-      timeout: config.timeout || 30000,
+      timeout: config.timeout ?? 30000,
       maxRedirects: 0,
       headers: {
         'Content-Type': 'application/json',

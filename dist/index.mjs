@@ -169,7 +169,7 @@ class BaseHevyClient {
     const baseURL = this.resolveBaseURL(config);
     this.client = axios.create({
       baseURL,
-      timeout: config.timeout || 30000,
+      timeout: config.timeout ?? 30000,
       maxRedirects: 0,
       headers: {
         "Content-Type": "application/json"
@@ -532,4 +532,4 @@ export {
   AuthenticationError
 };
 
-//# debugId=F827A6777F9CC60E64756E2164756E21
+//# debugId=7A2F60B719CA80E664756E2164756E21
