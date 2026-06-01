@@ -307,7 +307,7 @@ describe('Hevy Client', () => {
       new TestClient({ apiKey: 'test-key' });
 
       expect(axios.create).toHaveBeenCalledWith(
-        expect.objectContaining({ baseURL: 'https://api.hevyapp.com' }),
+        expect.objectContaining({ baseURL: 'https://api.hevyapp.com', maxRedirects: 0 }),
       );
     });
 
@@ -315,7 +315,7 @@ describe('Hevy Client', () => {
       new TestClient({ apiKey: 'test-key', baseURL: 'https://api.hevyapp.com/v1' });
 
       expect(axios.create).toHaveBeenCalledWith(
-        expect.objectContaining({ baseURL: 'https://api.hevyapp.com/v1' }),
+        expect.objectContaining({ baseURL: 'https://api.hevyapp.com/v1', maxRedirects: 0 }),
       );
     });
 
@@ -333,16 +333,47 @@ describe('Hevy Client', () => {
       expect(axios.create).not.toHaveBeenCalled();
     });
 
-    it('allows trusted custom origins', () => {
+    it('allows trusted HTTPS custom origins', () => {
       new TestClient({
         apiKey: 'test-key',
-        baseURL: 'http://127.0.0.1:3000',
+        baseURL: 'https://proxy.example.com',
         trustBaseURL: true,
       });
 
       expect(axios.create).toHaveBeenCalledWith(
-        expect.objectContaining({ baseURL: 'http://127.0.0.1:3000' }),
+        expect.objectContaining({ baseURL: 'https://proxy.example.com', maxRedirects: 0 }),
       );
+    });
+
+    it('allows trusted HTTP loopback origins', () => {
+      for (const baseURL of [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://[::1]:3000',
+      ]) {
+        vi.clearAllMocks();
+        new TestClient({
+          apiKey: 'test-key',
+          baseURL,
+          trustBaseURL: true,
+        });
+
+        expect(axios.create).toHaveBeenCalledWith(
+          expect.objectContaining({ baseURL, maxRedirects: 0 }),
+        );
+      }
+    });
+
+    it('rejects trusted non-HTTPS non-loopback origins', () => {
+      expect(
+        () =>
+          new TestClient({
+            apiKey: 'test-key',
+            baseURL: 'http://proxy.example.com',
+            trustBaseURL: true,
+          }),
+      ).toThrow(ConfigurationError);
+      expect(axios.create).not.toHaveBeenCalled();
     });
   });
 

@@ -151,9 +151,11 @@ try {
 }
 ```
 
-## API Key
+## API Key and Security
 
 Get your API key from [Hevy Settings > Developer](https://hevy.com/settings?developer).
+
+Keep Hevy API keys on trusted server-side runtimes only. Do not expose them in browsers, mobile apps, public repositories, client-side bundles, logs, telemetry, or other user-accessible environments.
 
 The client sends API keys only to the official Hevy API origin (`https://api.hevyapp.com`) by default. If you intentionally use a proxy, mock server, localhost, or any other custom `baseURL`, opt in explicitly:
 
@@ -164,6 +166,8 @@ const client = new Hevy({
   trustBaseURL: true,
 });
 ```
+
+Custom `baseURL` origins must use HTTPS when `trustBaseURL: true` is set. Trusted HTTP custom origins are allowed only for loopback development hosts (`localhost`, `127.0.0.1`, and `::1`). Credential-bearing requests also disable automatic redirects (`maxRedirects: 0`) so the `api-key` header is not forwarded to redirected destinations.
 
 Errors redact configured API key values and common sensitive fields such as authorization headers, tokens, passwords, and secrets before exposing response or network error metadata. Dynamic path segments such as IDs and measurement dates are URL-encoded before requests are sent.
 

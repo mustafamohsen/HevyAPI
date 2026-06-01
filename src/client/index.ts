@@ -16,6 +16,7 @@ import {
 import { redactSensitiveData, sanitizeError } from '../utils/redaction';
 
 const OFFICIAL_BASE_URL = 'https://api.hevyapp.com';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
 
 export interface HevyClientConfig {
   apiKey: string;
@@ -38,6 +39,7 @@ export abstract class BaseHevyClient {
     this.client = axios.create({
       baseURL,
       timeout: config.timeout || 30000,
+      maxRedirects: 0,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -58,9 +60,21 @@ export abstract class BaseHevyClient {
     }
 
     const officialOrigin = new URL(OFFICIAL_BASE_URL).origin;
-    if (parsedBaseURL.origin !== officialOrigin && config.trustBaseURL !== true) {
+    if (parsedBaseURL.origin === officialOrigin) {
+      return baseURL;
+    }
+
+    if (config.trustBaseURL !== true) {
       throw new ConfigurationError(
         'Custom baseURL origins require trustBaseURL: true because the API key will be sent to that origin.',
+      );
+    }
+
+    const isLoopbackHTTP =
+      parsedBaseURL.protocol === 'http:' && LOOPBACK_HOSTS.has(parsedBaseURL.hostname);
+    if (parsedBaseURL.protocol !== 'https:' && !isLoopbackHTTP) {
+      throw new ConfigurationError(
+        'Custom baseURL origins must use HTTPS unless they are trusted HTTP loopback hosts.',
       );
     }
 

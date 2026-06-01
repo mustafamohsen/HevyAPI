@@ -216,6 +216,7 @@ var sanitizeError = (error, options = {}, depth = 0, redact = (value) => redactS
 
 // src/client/index.ts
 var OFFICIAL_BASE_URL = "https://api.hevyapp.com";
+var LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 class BaseHevyClient {
   client;
@@ -226,6 +227,7 @@ class BaseHevyClient {
     this.client = import_axios.default.create({
       baseURL,
       timeout: config.timeout || 30000,
+      maxRedirects: 0,
       headers: {
         "Content-Type": "application/json"
       }
@@ -242,8 +244,15 @@ class BaseHevyClient {
       throw new ConfigurationError("Invalid baseURL. Provide a valid absolute URL.");
     }
     const officialOrigin = new URL(OFFICIAL_BASE_URL).origin;
-    if (parsedBaseURL.origin !== officialOrigin && config.trustBaseURL !== true) {
+    if (parsedBaseURL.origin === officialOrigin) {
+      return baseURL;
+    }
+    if (config.trustBaseURL !== true) {
       throw new ConfigurationError("Custom baseURL origins require trustBaseURL: true because the API key will be sent to that origin.");
+    }
+    const isLoopbackHTTP = parsedBaseURL.protocol === "http:" && LOOPBACK_HOSTS.has(parsedBaseURL.hostname);
+    if (parsedBaseURL.protocol !== "https:" && !isLoopbackHTTP) {
+      throw new ConfigurationError("Custom baseURL origins must use HTTPS unless they are trusted HTTP loopback hosts.");
     }
     return baseURL;
   }
@@ -547,4 +556,4 @@ class Hevy extends BaseHevyClient {
 }
 var src_default = Hevy;
 
-//# debugId=37A684F283283BAB64756E2164756E21
+//# debugId=E9012E166758442D64756E2164756E21
