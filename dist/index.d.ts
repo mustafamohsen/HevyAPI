@@ -1,5 +1,6 @@
 import type { HevyClientConfig } from './client';
 import { BaseHevyClient } from './client';
+export type { HevyClientConfig } from './client';
 import { ExerciseHistoryClient } from './resources/exerciseHistory';
 import { ExerciseTemplatesClient } from './resources/exerciseTemplates';
 import { RoutineFoldersClient } from './resources/routineFolders';

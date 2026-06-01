@@ -1,43 +1,68 @@
 import axios from 'axios';
-import { AuthenticationError, BaseHevyClient, Hevy, HevyAPIError, NetworkError, NotFoundError, RateLimitError, ValidationError } from '../src/index';
+import { BaseHevyClient } from '../src/client';
+import {
+  AuthenticationError,
+  ConfigurationError,
+  Hevy,
+  HevyAPIError,
+  NetworkError,
+  NotFoundError,
+  RateLimitError,
+  ValidationError,
+} from '../src/index';
 
-// Simple mock for axios
+const createClientMock = () => ({
+  interceptors: {
+    request: { use: vi.fn() },
+    response: { use: vi.fn() },
+  },
+  request: vi.fn(),
+});
+
 const mockAxios = {
-  create: () => ({
-    interceptors: {
-      request: { use: vi.fn() },
-      response: { use: vi.fn() }
-    },
-    request: vi.fn()
-  })
+  create: vi.fn(createClientMock),
 };
 
 vi.mock('axios', () => ({
   default: mockAxios,
-  create: mockAxios.create
+  create: mockAxios.create,
 }));
 
+class TestClient extends BaseHevyClient {}
+
+const getResponseErrorInterceptor = (client: TestClient) =>
+  (client as unknown as { client: ReturnType<typeof createClientMock> }).client.interceptors.response.use
+    .mock.calls[0][1];
+
+const getRequestInterceptor = (client: TestClient) =>
+  (client as unknown as { client: ReturnType<typeof createClientMock> }).client.interceptors.request.use
+    .mock.calls[0][0];
+
 describe('Hevy Client', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('Authentication Errors', () => {
     it('should throw AuthenticationError for 401 status', () => {
       const mockError = {
-        response: { status: 401, data: {}, headers: {} }
+        response: { status: 401, data: {}, headers: {} },
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       expect(() => interceptor(mockError)).toThrow(AuthenticationError);
     });
 
     it('should throw AuthenticationError for 403 status', () => {
       const mockError = {
-        response: { status: 403, data: {}, headers: {} }
+        response: { status: 403, data: {}, headers: {} },
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       expect(() => interceptor(mockError)).toThrow(AuthenticationError);
     });
   });
@@ -45,21 +70,55 @@ describe('Hevy Client', () => {
   describe('Validation Errors', () => {
     it('should throw ValidationError for 400 status with field errors', () => {
       const mockError = {
-        response: { 
-          status: 400, 
+        response: {
+          status: 400,
           data: { errors: { title: 'Required', description: 'Too long' } },
-          headers: {}
-        }
+          headers: {},
+        },
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       try {
         interceptor(mockError);
       } catch (error) {
         expect(error).toBeInstanceOf(ValidationError);
-        expect((error as ValidationError).fieldErrors).toEqual({ title: 'Required', description: 'Too long' });
+        expect((error as ValidationError).fieldErrors).toEqual({
+          title: 'Required',
+          description: 'Too long',
+        });
+      }
+    });
+
+    it('redacts secrets from validation field errors and JSON output', () => {
+      const secret = 'validation-secret-key';
+      const mockError = {
+        response: {
+          status: 400,
+          data: {
+            errors: {
+              apiKey: secret,
+              title: `contains ${secret}`,
+            },
+          },
+          headers: {},
+        },
+      };
+
+      const client = new TestClient({ apiKey: secret });
+      const interceptor = getResponseErrorInterceptor(client);
+
+      try {
+        interceptor(mockError);
+      } catch (error) {
+        const validationError = error as ValidationError;
+        expect(validationError).toBeInstanceOf(ValidationError);
+        expect(validationError.fieldErrors).toEqual({
+          apiKey: '[REDACTED]',
+          title: 'contains [REDACTED]',
+        });
+        expect(JSON.stringify(validationError)).not.toContain(secret);
       }
     });
   });
@@ -67,12 +126,12 @@ describe('Hevy Client', () => {
   describe('Not Found Errors', () => {
     it('should throw NotFoundError for 404 status', () => {
       const mockError = {
-        response: { status: 404, data: {}, headers: {} }
+        response: { status: 404, data: {}, headers: {} },
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       expect(() => interceptor(mockError)).toThrow(NotFoundError);
     });
   });
@@ -80,12 +139,12 @@ describe('Hevy Client', () => {
   describe('Rate Limit Errors', () => {
     it('should throw RateLimitError for 429 status with retry-after header', () => {
       const mockError = {
-        response: { status: 429, data: {}, headers: { 'retry-after': '10' } }
+        response: { status: 429, data: {}, headers: { 'retry-after': '10' } },
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       try {
         interceptor(mockError);
       } catch (error) {
@@ -96,12 +155,12 @@ describe('Hevy Client', () => {
 
     it('should use default retry after when header is missing', () => {
       const mockError = {
-        response: { status: 429, data: {}, headers: {} }
+        response: { status: 429, data: {}, headers: {} },
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       try {
         interceptor(mockError);
       } catch (error) {
@@ -115,24 +174,24 @@ describe('Hevy Client', () => {
     it('should throw NetworkError when no response (ECONNABORTED)', () => {
       const mockError = {
         code: 'ECONNABORTED',
-        response: null
+        response: null,
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       expect(() => interceptor(mockError)).toThrow(NetworkError);
     });
 
     it('should throw NetworkError when timeout (ETIMEDOUT)', () => {
       const mockError = {
         code: 'ETIMEDOUT',
-        response: null
+        response: null,
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       try {
         interceptor(mockError);
       } catch (error) {
@@ -140,17 +199,50 @@ describe('Hevy Client', () => {
         expect((error as NetworkError).message).toContain('timed out');
       }
     });
+
+    it('redacts secrets from Axios-like network errors and JSON output', () => {
+      const secret = 'super-secret-api-key';
+      const mockError = Object.assign(new Error(`failed with ${secret}`), {
+        code: 'ECONNRESET',
+        response: null,
+        config: {
+          url: `/v1/workouts?apiKey=${secret}&token=${secret}`,
+          headers: {
+            'api-key': secret,
+            Authorization: `Bearer ${secret}`,
+            'x-api-key': secret,
+          },
+          data: JSON.stringify({ password: secret, nested: `body-${secret}` }),
+        },
+      });
+
+      const client = new TestClient({ apiKey: secret });
+      const interceptor = getResponseErrorInterceptor(client);
+
+      try {
+        interceptor(mockError);
+      } catch (error) {
+        const networkError = error as NetworkError;
+        const serializedError = JSON.stringify(networkError);
+        expect(networkError).toBeInstanceOf(NetworkError);
+        expect(networkError.message).not.toContain(secret);
+        expect(networkError.originalError?.message).not.toContain(secret);
+        expect(serializedError).not.toContain(secret);
+        expect(serializedError).not.toContain('Bearer super-secret-api-key');
+        expect(serializedError).toContain('[REDACTED]');
+      }
+    });
   });
 
   describe('Default API Errors', () => {
     it('should throw HevyAPIError for 500 status', () => {
       const mockError = {
-        response: { status: 500, data: { message: 'Server error' }, headers: {} }
+        response: { status: 500, data: { message: 'Server error' }, headers: {} },
       };
-      
-      const client = new Hevy({ apiKey: 'test-key' });
-      const interceptor = (client as any).client.interceptors.response.use.mock.calls[0][1];
-      
+
+      const client = new TestClient({ apiKey: 'test-key' });
+      const interceptor = getResponseErrorInterceptor(client);
+
       try {
         interceptor(mockError);
       } catch (error) {
@@ -158,21 +250,96 @@ describe('Hevy Client', () => {
         expect((error as HevyAPIError).statusCode).toBe(500);
       }
     });
+
+    it('redacts secrets from response objects and JSON output', () => {
+      const secret = 'response-secret-key';
+      const mockError = {
+        response: {
+          status: 500,
+          data: {
+            message: `request failed for ${secret}`,
+            apiKey: secret,
+            nested: { access_token: secret, note: `query=${secret}` },
+          },
+          headers: {},
+        },
+      };
+
+      const client = new TestClient({ apiKey: secret });
+      const interceptor = getResponseErrorInterceptor(client);
+
+      try {
+        interceptor(mockError);
+      } catch (error) {
+        const apiError = error as HevyAPIError;
+        const serializedError = JSON.stringify(apiError);
+        expect(apiError.response).toEqual({
+          message: 'request failed for [REDACTED]',
+          apiKey: '[REDACTED]',
+          nested: { access_token: '[REDACTED]', note: 'query=[REDACTED]' },
+        });
+        expect(serializedError).not.toContain(secret);
+      }
+    });
   });
 
   describe('API Key Header', () => {
     it('should add api-key header to requests', () => {
       const mockHeaders = {
-        set: vi.fn()
+        set: vi.fn(),
       };
       const mockConfig = { headers: mockHeaders };
-      
-      const client = new Hevy({ apiKey: 'my-api-key' });
-      const interceptor = (client as any).client.interceptors.request.use.mock.calls[0][0];
-      
+
+      const client = new TestClient({ apiKey: 'my-api-key' });
+      const interceptor = getRequestInterceptor(client);
+
       interceptor(mockConfig);
-      
+
       expect(mockHeaders.set).toHaveBeenCalledWith('api-key', 'my-api-key');
+    });
+  });
+
+  describe('Base URL Trust', () => {
+    it('uses the official base URL by default without explicit trust', () => {
+      new TestClient({ apiKey: 'test-key' });
+
+      expect(axios.create).toHaveBeenCalledWith(
+        expect.objectContaining({ baseURL: 'https://api.hevyapp.com' }),
+      );
+    });
+
+    it('allows official-origin base URLs without explicit trust', () => {
+      new TestClient({ apiKey: 'test-key', baseURL: 'https://api.hevyapp.com/v1' });
+
+      expect(axios.create).toHaveBeenCalledWith(
+        expect.objectContaining({ baseURL: 'https://api.hevyapp.com/v1' }),
+      );
+    });
+
+    it('rejects custom origins unless explicitly trusted', () => {
+      expect(
+        () => new TestClient({ apiKey: 'test-key', baseURL: 'https://proxy.example.com' }),
+      ).toThrow(ConfigurationError);
+      expect(axios.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects localhost URLs unless explicitly trusted', () => {
+      expect(() => new TestClient({ apiKey: 'test-key', baseURL: 'http://localhost:3000' })).toThrow(
+        ConfigurationError,
+      );
+      expect(axios.create).not.toHaveBeenCalled();
+    });
+
+    it('allows trusted custom origins', () => {
+      new TestClient({
+        apiKey: 'test-key',
+        baseURL: 'http://127.0.0.1:3000',
+        trustBaseURL: true,
+      });
+
+      expect(axios.create).toHaveBeenCalledWith(
+        expect.objectContaining({ baseURL: 'http://127.0.0.1:3000' }),
+      );
     });
   });
 
@@ -276,6 +443,14 @@ describe('Error Classes', () => {
     it('should have default retry after', () => {
       const error = new RateLimitError();
       expect(error.retryAfter).toBe(5000);
+    });
+  });
+
+  describe('ConfigurationError', () => {
+    it('should have a configuration error name and message', () => {
+      const error = new ConfigurationError('Invalid config');
+      expect(error.name).toBe('ConfigurationError');
+      expect(error.message).toBe('Invalid config');
     });
   });
 

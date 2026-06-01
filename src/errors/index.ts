@@ -7,6 +7,15 @@ export class HevyAPIError extends Error {
     super(message);
     this.name = 'HevyAPIError';
   }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      statusCode: this.statusCode,
+      response: this.response,
+    };
+  }
 }
 
 export class AuthenticationError extends HevyAPIError {
@@ -47,6 +56,20 @@ export class ForbiddenError extends HevyAPIError {
   }
 }
 
+export class ConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConfigurationError';
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+    };
+  }
+}
+
 export class NetworkError extends Error {
   constructor(
     message: string,
@@ -54,5 +77,13 @@ export class NetworkError extends Error {
   ) {
     super(message);
     this.name = 'NetworkError';
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      message: this.message,
+      originalError: this.originalError,
+    };
   }
 }

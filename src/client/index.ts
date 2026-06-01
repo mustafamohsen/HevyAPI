@@ -6,17 +6,22 @@ import axios, {
 } from 'axios';
 import {
   AuthenticationError,
+  ConfigurationError,
   HevyAPIError,
   NetworkError,
   NotFoundError,
   RateLimitError,
   ValidationError,
 } from '../errors';
+import { redactSensitiveData, sanitizeError } from '../utils/redaction';
+
+const OFFICIAL_BASE_URL = 'https://api.hevyapp.com';
 
 export interface HevyClientConfig {
   apiKey: string;
   baseURL?: string;
   timeout?: number;
+  trustBaseURL?: boolean;
 }
 
 export interface RequestOptions extends AxiosRequestConfig {
@@ -29,8 +34,9 @@ export abstract class BaseHevyClient {
 
   constructor(config: HevyClientConfig) {
     this.apiKey = config.apiKey;
+    const baseURL = this.resolveBaseURL(config);
     this.client = axios.create({
-      baseURL: config.baseURL || 'https://api.hevyapp.com',
+      baseURL,
       timeout: config.timeout || 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -41,6 +47,26 @@ export abstract class BaseHevyClient {
     this.setupResponseInterceptor();
   }
 
+  private resolveBaseURL(config: HevyClientConfig): string {
+    const baseURL = config.baseURL || OFFICIAL_BASE_URL;
+    let parsedBaseURL: URL;
+
+    try {
+      parsedBaseURL = new URL(baseURL);
+    } catch {
+      throw new ConfigurationError('Invalid baseURL. Provide a valid absolute URL.');
+    }
+
+    const officialOrigin = new URL(OFFICIAL_BASE_URL).origin;
+    if (parsedBaseURL.origin !== officialOrigin && config.trustBaseURL !== true) {
+      throw new ConfigurationError(
+        'Custom baseURL origins require trustBaseURL: true because the API key will be sent to that origin.',
+      );
+    }
+
+    return baseURL;
+  }
+
   private setupRequestInterceptor(): void {
     this.client.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
@@ -48,7 +74,9 @@ export abstract class BaseHevyClient {
         return config;
       },
       (error: unknown) => {
-        return Promise.reject(new NetworkError('Failed to make request', error as Error));
+        return Promise.reject(
+          new NetworkError('Failed to make request', this.sanitizeOriginalError(error)),
+        );
       },
     );
   }
@@ -67,12 +95,12 @@ export abstract class BaseHevyClient {
       const isTimeout = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
       throw new NetworkError(
         isTimeout ? 'Request timed out' : 'Network error occurred',
-        error as Error,
+        this.sanitizeOriginalError(error),
       );
     }
 
     const status = error.response.status;
-    const responseData = error.response.data;
+    const responseData = this.sanitizeValue(error.response.data);
 
     switch (status) {
       case 400: {
@@ -111,7 +139,7 @@ export abstract class BaseHevyClient {
       if (typeof errors === 'object' && errors !== null) {
         return Object.entries(errors as Record<string, unknown>).reduce(
           (acc, [key, value]) => {
-            acc[key] = String(value);
+            acc[key] = String(this.sanitizeValue(value));
             return acc;
           },
           {} as Record<string, string>,
@@ -119,6 +147,18 @@ export abstract class BaseHevyClient {
       }
     }
     return undefined;
+  }
+
+  private sanitizeValue(value: unknown): unknown {
+    return redactSensitiveData(value, { secrets: [this.apiKey] });
+  }
+
+  private sanitizeOriginalError(error: unknown): Error {
+    if (error instanceof Error) {
+      return sanitizeError(error, { secrets: [this.apiKey] });
+    }
+
+    return new Error(String(this.sanitizeValue(error)));
   }
 
   protected async request<T>(options: RequestOptions): Promise<T> {
@@ -129,7 +169,7 @@ export abstract class BaseHevyClient {
       if (error instanceof HevyAPIError || error instanceof NetworkError) {
         throw error;
       }
-      throw new NetworkError('Unknown error occurred', error as Error);
+      throw new NetworkError('Unknown error occurred', this.sanitizeOriginalError(error));
     }
   }
 }

@@ -50,6 +50,7 @@ __export(exports_src, {
   HevyAPIError: () => HevyAPIError,
   Hevy: () => Hevy,
   ForbiddenError: () => ForbiddenError,
+  ConfigurationError: () => ConfigurationError,
   AuthenticationError: () => AuthenticationError
 });
 module.exports = __toCommonJS(exports_src);
@@ -66,6 +67,14 @@ class HevyAPIError extends Error {
     this.statusCode = statusCode;
     this.response = response;
     this.name = "HevyAPIError";
+  }
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      statusCode: this.statusCode,
+      response: this.response
+    };
   }
 }
 
@@ -108,6 +117,19 @@ class ForbiddenError extends HevyAPIError {
   }
 }
 
+class ConfigurationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ConfigurationError";
+  }
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message
+    };
+  }
+}
+
 class NetworkError extends Error {
   originalError;
   constructor(message, originalError) {
@@ -115,16 +137,94 @@ class NetworkError extends Error {
     this.originalError = originalError;
     this.name = "NetworkError";
   }
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      originalError: this.originalError
+    };
+  }
 }
 
+// src/utils/redaction.ts
+var REDACTED_VALUE = "[REDACTED]";
+var SENSITIVE_KEYS = new Set([
+  "api-key",
+  "apikey",
+  "authorization",
+  "x-api-key",
+  "token",
+  "access_token",
+  "refresh_token",
+  "password",
+  "secret"
+]);
+var MAX_REDACTION_DEPTH = 8;
+var isSensitiveKey = (key) => SENSITIVE_KEYS.has(key.toLowerCase());
+var redactString = (value, secrets) => {
+  let redacted = value;
+  for (const secret of secrets) {
+    if (secret.length > 0) {
+      redacted = redacted.split(secret).join(REDACTED_VALUE);
+    }
+  }
+  return redacted;
+};
+var redactSensitiveData = (value, options = {}) => {
+  const secrets = options.secrets ?? [];
+  const seen = new WeakSet;
+  const redact = (currentValue, depth) => {
+    if (typeof currentValue === "string") {
+      return redactString(currentValue, secrets);
+    }
+    if (currentValue === null || typeof currentValue === "number" || typeof currentValue === "boolean" || typeof currentValue === "undefined") {
+      return currentValue;
+    }
+    if (typeof currentValue !== "object") {
+      return String(currentValue);
+    }
+    if (depth >= MAX_REDACTION_DEPTH) {
+      return "[REDACTED_OBJECT]";
+    }
+    if (seen.has(currentValue)) {
+      return "[Circular]";
+    }
+    seen.add(currentValue);
+    if (currentValue instanceof Error) {
+      return sanitizeError(currentValue, options, depth + 1, redact);
+    }
+    if (Array.isArray(currentValue)) {
+      return currentValue.map((item) => redact(item, depth + 1));
+    }
+    const redactedObject = {};
+    for (const [key, objectValue] of Object.entries(currentValue)) {
+      redactedObject[key] = isSensitiveKey(key) ? REDACTED_VALUE : redact(objectValue, depth + 1);
+    }
+    return redactedObject;
+  };
+  return redact(value, 0);
+};
+var sanitizeError = (error, options = {}, depth = 0, redact = (value) => redactSensitiveData(value, options)) => {
+  const sanitizedError = new Error(redactString(error.message, options.secrets ?? []));
+  sanitizedError.name = error.name;
+  sanitizedError.stack = redactString(error.stack ?? "", options.secrets ?? []);
+  for (const [key, value] of Object.entries(error)) {
+    sanitizedError[key] = isSensitiveKey(key) ? REDACTED_VALUE : redact(value, depth + 1);
+  }
+  return sanitizedError;
+};
+
 // src/client/index.ts
+var OFFICIAL_BASE_URL = "https://api.hevyapp.com";
+
 class BaseHevyClient {
   client;
   apiKey;
   constructor(config) {
     this.apiKey = config.apiKey;
+    const baseURL = this.resolveBaseURL(config);
     this.client = import_axios.default.create({
-      baseURL: config.baseURL || "https://api.hevyapp.com",
+      baseURL,
       timeout: config.timeout || 30000,
       headers: {
         "Content-Type": "application/json"
@@ -133,12 +233,26 @@ class BaseHevyClient {
     this.setupRequestInterceptor();
     this.setupResponseInterceptor();
   }
+  resolveBaseURL(config) {
+    const baseURL = config.baseURL || OFFICIAL_BASE_URL;
+    let parsedBaseURL;
+    try {
+      parsedBaseURL = new URL(baseURL);
+    } catch {
+      throw new ConfigurationError("Invalid baseURL. Provide a valid absolute URL.");
+    }
+    const officialOrigin = new URL(OFFICIAL_BASE_URL).origin;
+    if (parsedBaseURL.origin !== officialOrigin && config.trustBaseURL !== true) {
+      throw new ConfigurationError("Custom baseURL origins require trustBaseURL: true because the API key will be sent to that origin.");
+    }
+    return baseURL;
+  }
   setupRequestInterceptor() {
     this.client.interceptors.request.use((config) => {
       config.headers.set("api-key", this.apiKey);
       return config;
     }, (error) => {
-      return Promise.reject(new NetworkError("Failed to make request", error));
+      return Promise.reject(new NetworkError("Failed to make request", this.sanitizeOriginalError(error)));
     });
   }
   setupResponseInterceptor() {
@@ -149,10 +263,10 @@ class BaseHevyClient {
   handleError(error) {
     if (!error.response) {
       const isTimeout = error.code === "ECONNABORTED" || error.code === "ETIMEDOUT";
-      throw new NetworkError(isTimeout ? "Request timed out" : "Network error occurred", error);
+      throw new NetworkError(isTimeout ? "Request timed out" : "Network error occurred", this.sanitizeOriginalError(error));
     }
     const status = error.response.status;
-    const responseData = error.response.data;
+    const responseData = this.sanitizeValue(error.response.data);
     switch (status) {
       case 400: {
         const fieldErrors = this.extractFieldErrors(responseData);
@@ -182,12 +296,21 @@ class BaseHevyClient {
       const errors = responseData.errors;
       if (typeof errors === "object" && errors !== null) {
         return Object.entries(errors).reduce((acc, [key, value]) => {
-          acc[key] = String(value);
+          acc[key] = String(this.sanitizeValue(value));
           return acc;
         }, {});
       }
     }
     return;
+  }
+  sanitizeValue(value) {
+    return redactSensitiveData(value, { secrets: [this.apiKey] });
+  }
+  sanitizeOriginalError(error) {
+    if (error instanceof Error) {
+      return sanitizeError(error, { secrets: [this.apiKey] });
+    }
+    return new Error(String(this.sanitizeValue(error)));
   }
   async request(options) {
     try {
@@ -197,7 +320,7 @@ class BaseHevyClient {
       if (error instanceof HevyAPIError || error instanceof NetworkError) {
         throw error;
       }
-      throw new NetworkError("Unknown error occurred", error);
+      throw new NetworkError("Unknown error occurred", this.sanitizeOriginalError(error));
     }
   }
 }
@@ -373,4 +496,4 @@ class Hevy extends BaseHevyClient {
 }
 var src_default = Hevy;
 
-//# debugId=F28272532E66277164756E2164756E21
+//# debugId=ED341ECD31F257ED64756E2164756E21

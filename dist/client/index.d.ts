@@ -3,6 +3,7 @@ export interface HevyClientConfig {
     apiKey: string;
     baseURL?: string;
     timeout?: number;
+    trustBaseURL?: boolean;
 }
 export interface RequestOptions extends AxiosRequestConfig {
     requiresAuth?: boolean;
@@ -11,11 +12,14 @@ export declare abstract class BaseHevyClient {
     protected client: AxiosInstance;
     protected apiKey: string;
     constructor(config: HevyClientConfig);
+    private resolveBaseURL;
     private setupRequestInterceptor;
     private setupResponseInterceptor;
     private handleError;
     private parseRetryAfter;
     private extractFieldErrors;
+    private sanitizeValue;
+    private sanitizeOriginalError;
     protected request<T>(options: RequestOptions): Promise<T>;
 }
 //# sourceMappingURL=index.d.ts.map

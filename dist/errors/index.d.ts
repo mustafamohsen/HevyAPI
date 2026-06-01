@@ -2,6 +2,7 @@ export declare class HevyAPIError extends Error {
     statusCode: number;
     response?: unknown | undefined;
     constructor(message: string, statusCode: number, response?: unknown | undefined);
+    toJSON(): Record<string, unknown>;
 }
 export declare class AuthenticationError extends HevyAPIError {
     constructor(message?: string);
@@ -20,8 +21,13 @@ export declare class RateLimitError extends HevyAPIError {
 export declare class ForbiddenError extends HevyAPIError {
     constructor(message?: string);
 }
+export declare class ConfigurationError extends Error {
+    constructor(message: string);
+    toJSON(): Record<string, unknown>;
+}
 export declare class NetworkError extends Error {
     originalError?: Error | undefined;
     constructor(message: string, originalError?: Error | undefined);
+    toJSON(): Record<string, unknown>;
 }
 //# sourceMappingURL=index.d.ts.map

@@ -143,6 +143,18 @@ try {
 
 Get your API key from [Hevy Settings > Developer](https://hevy.com/settings?developer).
 
+The client sends API keys only to the official Hevy API origin (`https://api.hevyapp.com`) by default. If you intentionally use a proxy, mock server, localhost, or any other custom `baseURL`, opt in explicitly:
+
+```typescript
+const client = new Hevy({
+  apiKey: process.env.HEVY_API_KEY!,
+  baseURL: 'http://localhost:3000',
+  trustBaseURL: true,
+});
+```
+
+Errors redact configured API key values and common sensitive fields such as authorization headers, tokens, passwords, and secrets before exposing response or network error metadata.
+
 For complete API documentation, visit the [Hevy API Documentation](https://api.hevyapp.com/docs/).
 
 ## Documentation for AI/LLM Context
